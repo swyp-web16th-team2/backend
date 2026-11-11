@@ -28,4 +28,8 @@ docker build -t backend .
 docker run --rm -p 3000:3000 backend
 ```
 
+## 이미지
+
+`main`에 병합되면 GitHub Actions가 이미지를 `ghcr.io/swyp-web16th-team2/backend:<커밋 SHA>`로 올립니다. `latest` 태그는 쓰지 않습니다.
+
 브랜치·커밋·PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 따릅니다.
