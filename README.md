@@ -12,6 +12,10 @@ npm run start:dev   # http://localhost:3000
 - 포트는 환경 변수 `PORT`로 바꿀 수 있습니다. 기본값은 3000입니다.
 - 확인: `curl http://localhost:3000` → `Hello World!`
 
+## CORS
+
+브라우저(React 등)에서 이 API를 부를 수 있는 주소는 환경 변수 `CORS_ORIGINS`(쉼표로 구분)로 정합니다. 없으면 로컬 개발 주소(`http://localhost:3000`, `http://localhost:5173`)만 허용합니다. 배포 환경의 값은 `infra` 레포 `apps/backend/deployment.yaml`에서 바꿉니다.
+
 ## 자주 쓰는 명령
 
 | 명령 | 하는 일 |
