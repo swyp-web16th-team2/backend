@@ -9,7 +9,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # PR 브랜치는 새 푸시가 오면 이전 실행을 취소한다. main은 실행마다 그룹을 따로 줘서
+  # 연달아 병합돼도 앞선 커밋의 이미지 게시(publish)가 취소되지 않게 한다.
+  group: ci-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
   cancel-in-progress: true
 
 jobs:
