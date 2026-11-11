@@ -99,10 +99,13 @@ jobs:
           for i in 1 2 3; do
             git fetch -q origin main
             git reset -q --hard origin/main
-            # 지금 배포된(infra에 적힌) 커밋 SHA
-            current=$(awk "$AWK_BLOCK"' inb && /^ *image: / { print $2; n++ } END { exit n != 1 }' apps/backend/deployment.yaml)
-            current=${current##*:}
-            if ! printf '%s' "$current" | grep -Eq '^[0-9a-f]{40}$'; then echo "infra의 현재 이미지 태그가 커밋 SHA가 아닙니다($current). 사람이 확인해야 합니다."; exit 1; fi
+            # 지금 배포된(infra에 적힌) 이미지. ghcr.io/<이 저장소>:<커밋 SHA 40자> 형식이 아니면(다른 레지스트리·저장소 포함) 실패한다.
+            cur_image=$(awk "$AWK_BLOCK"' inb && /^ *image: / { print $2; n++ } END { exit n != 1 }' apps/backend/deployment.yaml)
+            current=${cur_image##*:}
+            if [ "${cur_image%:*}" != "ghcr.io/${GITHUB_REPOSITORY}" ] || ! printf '%s' "$current" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "infra의 현재 이미지($cur_image)가 ghcr.io/${GITHUB_REPOSITORY}:<커밋 SHA> 형식이 아닙니다. 사람이 확인해야 합니다."
+              exit 1
+            fi
             # 이 커밋이 지금 배포된 커밋보다 앞선 커밋일 때만 바꾼다.
             status=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${current}...${GITHUB_SHA}" --jq .status)
             case "$status" in
