@@ -64,7 +64,21 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
           cache-from: type=gha
-      # 이미지가 올라가면 infra 레포의 이미지 태그를 이 커밋으로 바꿔 Argo CD가 자동 배포하게 한다.
+
+  # publish가 끝나면 infra 레포의 이미지 태그를 이 커밋으로 바꿔 Argo CD가 자동 배포하게 한다.
+  # 이 작업은 repo 전체에서 한 번에 하나만 돈다(큐). 그래서 먼저 끝난 옛 커밋이 늦게 push해서
+  # 새 커밋 태그를 덮는 일이 없다. 큐에서 밀린 중간 커밋은 취소되지만, 더 새 커밋이 배포하므로 괜찮다.
+  # 이 키로 CI가 infra를 바꿀 수 있으므로 키는 이 작업에서만 쓴다(main 병합 때만 실행).
+  deploy:
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: infra-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: swyp-web16th-team2/infra
@@ -72,24 +86,31 @@ jobs:
           ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
           path: infra
       - name: infra 이미지 태그 갱신
+        shell: bash
         working-directory: infra
         env:
           IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
         run: |
-          # 그 사이 main에 더 새 커밋이 들어왔으면 건너뛴다. 오래된 커밋이 늦게 끝나 옛 버전으로 되돌리는 것을 막는다.
-          tip=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}" refs/heads/main | cut -f1)
-          if [ "$tip" != "$GITHUB_SHA" ]; then
-            echo "main이 더 새 커밋($tip)으로 넘어가서 태그 갱신을 건너뜁니다."
-            exit 0
-          fi
-          sed -i "s#^\( *image: \)ghcr\.io/.*#\1${IMAGE}#" apps/backend/deployment.yaml
-          grep -q "image: ${IMAGE}$" apps/backend/deployment.yaml
-          if git diff --quiet; then echo "이미 같은 태그입니다."; exit 0; fi
-          git config user.name "backend-ci"
-          git config user.email "backend-ci@users.noreply.github.com"
-          git commit -qam "chore: backend 이미지 태그를 ${GITHUB_SHA::7}로 갱신"
           for i in 1 2 3; do
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            # main이 더 새 커밋으로 넘어갔으면 건너뛴다(그 커밋이 배포한다). 조회에 실패하면 실패로 끝낸다.
+            tip=$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}" refs/heads/main)
+            tip=${tip%%[[:space:]]*}
+            if [ -z "$tip" ]; then echo "backend main 조회에 실패했습니다."; exit 1; fi
+            if [ "$tip" != "$GITHUB_SHA" ]; then
+              echo "main이 더 새 커밋($tip)으로 넘어가서 태그 갱신을 건너뜁니다."
+              exit 0
+            fi
+            # name이 backend인 컨테이너의 image 줄 하나만 바꾼다. 정확히 한 줄이 아니면 실패한다.
+            awk -v img="$IMAGE" '/^ *- name: backend$/ {inb=1} inb && /^ *image: / {sub(/image: .*/, "image: " img); inb=0; n++} {print} END {exit n != 1}' apps/backend/deployment.yaml > deployment.yaml.new
+            mv deployment.yaml.new apps/backend/deployment.yaml
+            grep -q "image: ${IMAGE}$" apps/backend/deployment.yaml
+            if git diff --quiet; then echo "이미 같은 태그입니다."; exit 0; fi
+            git config user.name "backend-ci"
+            git config user.email "backend-ci@users.noreply.github.com"
+            git commit -qam "chore: backend 이미지 태그를 ${GITHUB_SHA::7}로 갱신"
             git push origin HEAD:main && exit 0
-            git pull -q --rebase origin main
+            echo "push 실패($i/3), 처음부터 다시 시도합니다."
           done
           exit 1

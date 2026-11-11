@@ -32,6 +32,6 @@ docker run --rm -p 3000:3000 backend
 
 `main`에 병합되면 GitHub Actions가 이미지를 `ghcr.io/swyp-web16th-team2/backend:<커밋 SHA>`로 올립니다. `latest` 태그는 쓰지 않습니다.
 
-이어서 `infra` 레포의 이미지 태그를 같은 커밋 SHA로 자동으로 바꿔 커밋하고, Argo CD가 그것을 보고 홈서버 k3s에 배포합니다. (`infra`에 쓸 수 있는 배포 키가 Actions 시크릿 `INFRA_DEPLOY_KEY`에 있어야 합니다.)
+이어서 `infra` 레포의 이미지 태그를 같은 커밋 SHA로 자동으로 바꿔 커밋하고, Argo CD가 그것을 보고 홈서버 k3s에 배포합니다. (`infra`에 쓸 수 있는 배포 키가 Actions 시크릿 `INFRA_DEPLOY_KEY`에 있어야 합니다. 이 키로 CI가 `infra` 전체를 바꿀 수 있으므로 `main` 병합 때만 도는 `deploy` 작업에서만 씁니다.)
 
 브랜치·커밋·PR 규칙은 [CONTRIBUTING.md](CONTRIBUTING.md)를 따릅니다.
