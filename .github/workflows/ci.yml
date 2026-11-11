@@ -64,3 +64,63 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
           cache-from: type=gha
+
+  # 이 커밋의 이미지를 infra 레포의 이미지 태그로 반영해 Argo CD가 자동 배포하게 한다.
+  # 단, 이 커밋이 지금 배포된 버전보다 "앞선" 커밋일 때만 바꾼다. 그래서 늦게 끝난 옛 실행이나 재실행이
+  # 새 버전을 옛 버전으로 되돌리지 못한다. 이 작업은 저장소 전체에서 한 번에 하나만 돌고,
+  # 대기 중인 작업은 취소되지 않고 줄을 선다(queue: max).
+  # 이 키로 CI가 infra를 바꿀 수 있으므로 키는 이 작업에서만 쓴다(main 병합 때만 실행).
+  deploy:
+    needs: publish
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: infra-deploy
+      cancel-in-progress: false
+      queue: max # 대기 작업을 최대 100개까지 보존한다(기본은 1개라 새 대기 작업이 이전 대기 작업을 취소함).
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: swyp-web16th-team2/infra
+          ref: main
+          ssh-key: ${{ secrets.INFRA_DEPLOY_KEY }}
+          path: infra
+      - name: infra 이미지 태그 갱신
+        shell: bash
+        working-directory: infra
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # backend 컨테이너의 image 줄에서 값만 읽거나(print) 바꾸는(replace) awk. 블록은 같은 들여쓰기의 다음 컨테이너나
+          # 더 바깥 키에서 끝나고, image 줄이 정확히 하나가 아니면 실패한다.
+          AWK_BLOCK='{ match($0, /^ */); cur = RLENGTH } NF && inb && cur < ind { inb = 0 } /^ *- name: / { if ($0 ~ /^ *- name: backend$/) { inb = 1; ind = cur } else if (inb && cur == ind) { inb = 0 } }'
+          for i in 1 2 3; do
+            git fetch -q origin main
+            git reset -q --hard origin/main
+            # 지금 배포된(infra에 적힌) 이미지. ghcr.io/<이 저장소>:<커밋 SHA 40자> 형식이 아니면(다른 레지스트리·저장소 포함) 실패한다.
+            cur_image=$(awk "$AWK_BLOCK"' inb && /^ *image: / { print $2; n++ } END { exit n != 1 }' apps/backend/deployment.yaml)
+            current=${cur_image##*:}
+            if [ "${cur_image%:*}" != "ghcr.io/${GITHUB_REPOSITORY}" ] || ! printf '%s' "$current" | grep -Eq '^[0-9a-f]{40}$'; then
+              echo "infra의 현재 이미지($cur_image)가 ghcr.io/${GITHUB_REPOSITORY}:<커밋 SHA> 형식이 아닙니다. 사람이 확인해야 합니다."
+              exit 1
+            fi
+            # 이 커밋이 지금 배포된 커밋보다 앞선 커밋일 때만 바꾼다.
+            status=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${current}...${GITHUB_SHA}" --jq .status)
+            case "$status" in
+              ahead) ;;
+              identical|behind) echo "이 커밋은 지금 배포된 버전과 같거나 더 오래되어 건너뜁니다($status)."; exit 0 ;;
+              *) echo "커밋 비교 결과가 예상 밖입니다($status). 사람이 확인해야 합니다."; exit 1 ;;
+            esac
+            IMAGE="ghcr.io/${GITHUB_REPOSITORY}:${GITHUB_SHA}"
+            awk -v img="$IMAGE" "$AWK_BLOCK"' inb && /^ *image: / { sub(/image: .*/, "image: " img); n++ } { print } END { exit n != 1 }' apps/backend/deployment.yaml > deployment.yaml.new
+            mv deployment.yaml.new apps/backend/deployment.yaml
+            if [ "$(git diff --numstat | awk '{print $1 + $2}')" != "2" ]; then echo "image 한 줄 외에 바뀐 곳이 있거나 바뀐 곳이 없습니다."; exit 1; fi
+            git config user.name "backend-ci"
+            git config user.email "backend-ci@users.noreply.github.com"
+            git commit -qam "chore: backend 이미지 태그를 ${GITHUB_SHA::7}로 갱신"
+            git push origin HEAD:main && exit 0
+            echo "push 실패($i/3), 처음부터 다시 시도합니다."
+          done
+          exit 1
