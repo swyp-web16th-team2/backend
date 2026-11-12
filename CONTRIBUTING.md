@@ -37,6 +37,10 @@
 - **type**: `feat` / `fix` / `refactor` / `chore` / `docs` / `style` / `perf` / `test` / `build` / `ci` / `revert`
 - 제목은 한국어로 적고, 코드 이름·경로·URL은 그대로 둡니다.
 
+## DB 구조를 바꾸는 PR
+
+`prisma/schema.prisma`를 바꾸는 PR은 마이그레이션 파일을 같이 올리고 [docs/migrations.md](docs/migrations.md)를 따릅니다. PR 본문에 DB가 어떻게 바뀌는지, 데이터가 사라지는 변경이 있는지 적습니다.
+
 ## PR
 
 - 제목: `[SW2-<번호>] 내용` (예: `[SW2-45] 스페이스 초대 링크 만들기`)

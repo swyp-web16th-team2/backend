@@ -42,6 +42,8 @@ jobs:
       REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # 마이그레이션 변경 확인에 main과의 비교가 필요하다
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -50,6 +52,19 @@ jobs:
       - run: npm run lint
       # 테스트 코드까지 포함한 전체 타입 검사. Vitest와 린트는 타입 오류를 잡지 못한다.
       - run: npm run typecheck
+      # 이미 병합된 마이그레이션을 고치거나 지우면 운영 DB에 적용하는 migrate deploy가 아무 경고 없이 넘어간다.
+      # 그래서 PR에서 막는다. 새 마이그레이션을 추가하는 것만 허용한다(docs/migrations.md).
+      - name: 이미 있는 마이그레이션을 고치거나 지우지 않았는지 확인
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          changed=$(git diff --name-status "origin/${BASE_REF}...HEAD" -- prisma/migrations | grep -v '^A' || true)
+          if [ -n "$changed" ]; then
+            echo "::error::이미 있는 마이그레이션 파일이 바뀌었습니다. 새 마이그레이션을 추가하세요(docs/migrations.md)."
+            echo "$changed"
+            exit 1
+          fi
       - run: npm run build
       - run: npm test
       - run: npm run test:e2e
