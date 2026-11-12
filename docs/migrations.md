@@ -113,7 +113,7 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 4. 승인자가 Actions 실행 화면의 **Review deployments**에서 `production`을 승인하면 `npx prisma migrate deploy`가 운영 DB에 적용됩니다.
 5. `migrate`가 **성공해야 `deploy`가 돕니다.** 실패하거나 승인하지 않으면(거절·대기) 새 버전은 배포되지 않고, 지금 돌고 있는 버전이 그대로 유지됩니다.
 
-**승인자가 볼 것**: 이 병합에 들어 있는 `migration.sql`입니다. 컬럼·테이블 삭제(`DROP`), 이름 변경(`DROP`+`ADD`로 나옴), 타입 변경, 큰 테이블 잠금이 있으면 승인하지 않고 팀과 먼저 상의합니다(2절). 승인자는 지금 `labyrinth30` 한 명이고, 레포 Settings > Environments > production에서 바꿉니다.
+**승인자가 볼 것**: 승인하면 **아직 적용 안 된 마이그레이션이 모두** 적용됩니다(이번 병합의 것뿐 아니라 앞선 병합에서 대기·거절·실패로 남은 것도). 그 SQL 전체가 이 실행의 `migrate-plan` 작업 **요약(Summary) 화면**에 나옵니다(파일당 200줄까지). 그 화면의 SQL을 읽고 승인합니다. 컬럼·테이블 삭제(`DROP`), 이름 변경(`DROP`+`ADD`로 나옴), 타입 변경, 큰 테이블 잠금이 있으면 승인하지 않고 팀과 먼저 상의합니다(2절). 승인자는 지금 `labyrinth30` 한 명이고, 레포 Settings > Environments > production에서 바꿉니다.
 
 **설정(한 번만, 사람이 합니다)**
 - `production` 환경은 만들어져 있고, 승인자 필수이며 `main` 브랜치에서만 쓸 수 있게 제한되어 있습니다.
@@ -125,7 +125,7 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 - 이번 병합 사이에 아직 배포 안 된 앞선 마이그레이션이 있으면 그것도 함께 적용 대상이 됩니다(비교 기준이 "지금 배포된 커밋"이라서). 앞선 병합의 `migrate`가 대기 중이면 뒤따르는 병합도 같이 승인 대기에 들어갑니다.
 - 배포된 커밋을 읽지 못하는 등 판단이 안 서면 적용 쪽(승인 대기)으로 기웁니다. 승인했는데 적용할 게 없으면 "No pending migrations"로 끝납니다.
 - 운영에는 별도 스테이징이 없어서 승인 즉시 운영 DB가 바뀝니다. 첫 마이그레이션은 작게(테이블 추가 정도로) 시작합니다.
-- **확인 범위**: 판단 로직(`migrate-plan`)은 여러 git 상황으로 로컬에서 시험했고, `npm ci --ignore-scripts` 뒤 `prisma migrate deploy`가 임시 Postgres에서 적용되는 것도 확인했습니다. 실제 GitHub Actions의 승인 대기와 실제 Supabase 세션 풀러 접속은 첫 마이그레이션 PR에서 처음 실행됩니다.
+- **확인 범위**: 판단 로직(`migrate-plan`)은 여러 git 상황으로 로컬에서 시험했고, `npm ci --ignore-scripts` 뒤 `prisma migrate deploy`가 임시 Postgres에서 적용되는 것도 확인했습니다. 실제 GitHub Actions의 승인 대기, 요약 화면에 SQL이 나오는 것, 실제 Supabase 세션 풀러 접속은 첫 마이그레이션 PR에서 처음 실행됩니다.
 
 **사람이 운영 DB에 직접 명령을 쳐야 할 때**(장애 복구, `P3009` 해소 등)의 확인 사항입니다. 모두 로컬 DB로 확인했고, 실제 Supabase에서는 아직 확인하지 못했습니다.
 1. **작업 트리가 깨끗하고 최신 `main`인지**: `git status --porcelain`이 비어 있고(추적·미추적 파일 모두) `git fetch origin main && git rev-parse HEAD origin/main`이 같아야 합니다. `status`와 `deploy`는 커밋이 아니라 **현재 작업 트리의 파일**을 읽기 때문에, 오래된 작업 트리에서는 최신 마이그레이션이 빠진 채 "성공"하고, 수정되었거나 추적 안 되는 SQL이 그대로 운영에 적용될 수 있습니다.
