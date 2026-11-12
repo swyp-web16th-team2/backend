@@ -1,6 +1,7 @@
 import net from 'node:net';
 import { Injectable } from '@nestjs/common';
 import { Client } from 'pg';
+import { databaseUrl } from './database-url.js';
 
 const TIMEOUT_MS = 2000;
 
@@ -11,9 +12,13 @@ const TIMEOUT_MS = 2000;
 @Injectable()
 export class DbHealthService {
   async ping(): Promise<void> {
+    const connectionString = databaseUrl();
+    // 주소가 없으면 연결을 시도하지 않고 바로 실패시킨다(pg가 PGHOST 같은 기본 환경 변수로 다른 DB에 붙는 것을 막는다).
+    if (!connectionString)
+      throw new Error('DATABASE_URL이 설정되지 않았습니다');
     const socket = new net.Socket();
     const client = new Client({
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       stream: () => socket, // 점검이 끝나거나 시간이 지나면 이 소켓을 직접 끊기 위해 우리가 만든 소켓을 쓴다
       connectionTimeoutMillis: TIMEOUT_MS,
       query_timeout: TIMEOUT_MS,

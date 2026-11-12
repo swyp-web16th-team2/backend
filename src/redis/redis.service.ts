@@ -1,11 +1,12 @@
 import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { Redis } from 'ioredis';
+import { redisUrl, UNCONFIGURED_REDIS_URL } from './redis-url.js';
 
 @Injectable()
 export class RedisService extends Redis implements OnModuleDestroy {
   constructor() {
     // 연결은 처음 명령을 보낼 때 맺는다. Redis가 꺼져 있어도 서버는 뜨고 /health가 down으로 알려 준다.
-    super(process.env.REDIS_URL ?? 'redis://127.0.0.1:6380', {
+    super(redisUrl() ?? UNCONFIGURED_REDIS_URL, {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
       connectTimeout: 5000,

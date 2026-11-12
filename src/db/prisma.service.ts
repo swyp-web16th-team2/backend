@@ -1,6 +1,7 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../generated/prisma/client.js';
+import { databaseUrl, UNCONFIGURED_DATABASE_URL } from './database-url.js';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleDestroy {
@@ -11,7 +12,7 @@ export class PrismaService extends PrismaClient implements OnModuleDestroy {
       // 쿼리에는 클라이언트 쪽 제한 시간(query_timeout)을 걸지 않았다. 시간 초과 에러가 나도 DB는 쿼리를 계속 실행하므로,
       // 쓰기에서는 "실패로 보였지만 커밋됨"이 되어 재시도 때 중복 쓰기가 생길 수 있다. 쓰기 기능을 만들 때 서버 쪽 취소를 정한다.
       adapter: new PrismaPg({
-        connectionString: process.env.DATABASE_URL,
+        connectionString: databaseUrl() ?? UNCONFIGURED_DATABASE_URL,
         connectionTimeoutMillis: 5000,
         keepAlive: true,
         keepAliveInitialDelayMillis: 10_000,
