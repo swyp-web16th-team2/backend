@@ -7,3 +7,5 @@ coverage
 .env.*
 *.md
 test
+src/generated
+compose.yaml

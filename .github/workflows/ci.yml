@@ -17,6 +17,29 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # e2e가 실제 DB·Redis에 연결해 보도록 서비스 컨테이너를 같이 띄운다.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: swyp
+          POSTGRES_PASSWORD: swyp
+          POSTGRES_DB: swyp
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U swyp -d swyp"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://swyp:swyp@localhost:5432/swyp
+      REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
