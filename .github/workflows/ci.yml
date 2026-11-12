@@ -42,6 +42,8 @@ jobs:
       REDIS_URL: redis://localhost:6379
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # 마이그레이션 변경 확인에 main과의 비교가 필요하다
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
@@ -50,6 +52,30 @@ jobs:
       - run: npm run lint
       # 테스트 코드까지 포함한 전체 타입 검사. Vitest와 린트는 타입 오류를 잡지 못한다.
       - run: npm run typecheck
+      # 이미 병합된 마이그레이션을 고치거나 지우면 운영 DB에 적용하는 migrate deploy가 아무 경고 없이 넘어간다.
+      # 그래서 PR에서 막는다. 새 마이그레이션을 추가하는 것만 허용한다(docs/migrations.md).
+      - name: 이미 있는 마이그레이션을 고치거나 지우지 않았는지 확인
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          # git diff가 실패하면(기준 브랜치를 못 찾는 등) 여기서 바로 실패한다. 파이프에 넣으면 실패가 묻힌다.
+          git diff --name-status "origin/${BASE_REF}...HEAD" -- prisma/migrations > "$RUNNER_TEMP/migration-diff.txt"
+          changed=$(grep -v '^A' "$RUNNER_TEMP/migration-diff.txt" || true)
+          if [ -n "$changed" ]; then
+            echo "::error::이미 있는 마이그레이션 파일이 바뀌었습니다. 새 마이그레이션을 추가하세요(docs/migrations.md)."
+            echo "$changed"
+            exit 1
+          fi
+      # schema.prisma만 바꾸고 마이그레이션을 빠뜨리면 코드와 DB가 어긋난다. 깨끗한 DB를 새로 만들어 마이그레이션만 적용한 뒤
+      # schema.prisma와 비교해서 잡는다(내 로컬 DB에 남은 수동 변경에 가려지지 않는다). 모델이 아직 없는 지금 상태에서도 통과한다.
+      - name: schema.prisma와 마이그레이션이 같은지 확인
+        env:
+          DIRECT_URL: postgresql://swyp:swyp@localhost:5432/swyp_migration_check
+        run: |
+          PGPASSWORD=swyp psql -h localhost -U swyp -d swyp -v ON_ERROR_STOP=1 -c 'CREATE DATABASE swyp_migration_check'
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - run: npm run build
       - run: npm test
       - run: npm run test:e2e
