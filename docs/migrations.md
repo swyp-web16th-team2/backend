@@ -37,7 +37,7 @@ npm test && npm run test:e2e               # 5) 테스트
   DIRECT_URL="$LOCAL_URL" npm run db:deploy                       # 마이그레이션만으로 DB를 만들고
   DIRECT_URL="$LOCAL_URL" npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
   ```
-  두 명령에 같은 로컬 주소를 직접 넘기는 이유는 위 ⚠️ 때문입니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요. 종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `npm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
+  두 명령에 같은 로컬 주소를 직접 넘기는 이유는 위 ⚠️ 때문입니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요. 종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `DIRECT_URL="$LOCAL_URL" npm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
   - **깨끗하지 않은 DB에서 이 비교를 하면 빠뜨림을 놓칠 수 있습니다**(확인함: 로컬 DB에 손으로 컬럼을 추가하고 `schema.prisma`에도 추가했는데 마이그레이션은 없을 때, 현재 DB와 비교하면 종료 코드 0이 나오고 깨끗한 DB와 비교하면 2가 나옴. 코드 리뷰에서도 같은 결과). 위 로컬 확인은 반드시 `down -v` 뒤에 하세요.
 - 주의: `migrate dev --create-only`는 **바뀐 게 없어도 빈 마이그레이션 폴더를 만듭니다**(확인함). "바뀐 게 있는지" 확인하는 용도로 쓰지 마세요. 또 `migrate dev`는 만든 마이그레이션을 **바로 적용**하므로, 적용된 뒤에는 폴더 이름을 바꾸지 못합니다(3절). 이름은 처음부터 알맞게 정합니다.
 
@@ -97,8 +97,8 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate diff --from-config-datasource --to-sc
 DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 ```
 
-- **`migrate status`는 DB를 손으로 바꾼 것(drift)을 알려주지 않습니다**(확인함: "Database schema is up to date!"). 구조가 의심되면 위의 `migrate diff`를 쓰고, 로컬에서는 `npm run db:migrate`가 drift를 알려 줍니다.
-- 로컬 DB를 처음부터 다시 만들기: `docker compose down -v` → `docker compose up -d` → `DIRECT_URL="$LOCAL_URL" npm run db:deploy`(`LOCAL_URL`은 1절의 로컬 주소. 확인함: 빈 DB에서 마이그레이션이 전부 순서대로 적용됨). 로컬 데이터가 **모두 사라집니다.** (`npx prisma migrate reset`도 같은 일을 하는 공식 명령이며 직접 터미널에서 실행합니다.)
+- **`migrate status`는 DB를 손으로 바꾼 것(drift)을 알려주지 않습니다**(확인함: "Database schema is up to date!"). 구조가 의심되면 위의 `migrate diff`를 쓰고, 로컬에서는 `DIRECT_URL="$LOCAL_URL" npm run db:migrate`가 drift를 알려 줍니다.
+- 로컬 DB를 처음부터 다시 만들기: `docker compose down -v` → `docker compose up -d` → `DIRECT_URL="$LOCAL_URL" npm run db:deploy`(`LOCAL_URL`은 1절의 로컬 주소. 확인함: 빈 DB에서 마이그레이션이 전부 순서대로 적용됨). 로컬 데이터가 **모두 사라집니다.** (`migrate reset`이라는 공식 명령도 있지만 이 가이드에서는 시험하지 않았고, 위 Compose 방법으로 충분합니다. 쓰려면 반드시 `DIRECT_URL="$LOCAL_URL" npx prisma migrate reset`처럼 로컬 주소를 붙여 직접 터미널에서 실행합니다.)
 - **`npx prisma`는 레포에 설치된 버전(7.10.1)을 써야 합니다.** `npm install`을 하지 않은 폴더에서 실행하면 npm의 **최신 버전**을 받아 실행하는데, 그 버전(8.0 rc)에서는 `migrate diff`가 다른 명령으로 옮겨졌다는 안내가 나왔습니다(확인함). Prisma를 올릴 때는 이 문서의 명령을 모두 다시 확인합니다.
 - AI 에이전트(Claude Code 등)로 개발할 때: Prisma 7은 에이전트가 `migrate reset` 같은 위험 명령을 실행하면 **사용자 동의 없이는 거부**합니다(확인함). 동의를 대신 넣어서 우회하지 말고 사람이 직접 판단해서 실행합니다.
 
