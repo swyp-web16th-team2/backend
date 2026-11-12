@@ -1,23 +1,28 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { afterEach, vi } from 'vitest';
-import { PrismaService } from '../db/prisma.service.js';
+import { DbHealthService } from '../db/db-health.service.js';
 import { RedisService } from '../redis/redis.service.js';
 import { HealthController } from './health.controller.js';
 
+function fakeDb(ping: () => Promise<void>) {
+  return { ping } as unknown as DbHealthService;
+}
+
+function fakeRedis(ping: () => Promise<string>) {
+  return { ping } as unknown as RedisService;
+}
+
 function controller(db: 'up' | 'down', redis: 'up' | 'down' | 'wrong') {
-  const prisma = {
-    $queryRaw: () =>
-      db === 'up'
-        ? Promise.resolve([{ '?column?': 1 }])
-        : Promise.reject(new Error('db')),
-  } as unknown as PrismaService;
-  const client = {
-    ping: () =>
+  return new HealthController(
+    fakeDb(() =>
+      db === 'up' ? Promise.resolve() : Promise.reject(new Error('db')),
+    ),
+    fakeRedis(() =>
       redis === 'down'
         ? Promise.reject(new Error('redis'))
         : Promise.resolve(redis === 'up' ? 'PONG' : 'NOPE'),
-  } as unknown as RedisService;
-  return new HealthController(prisma, client);
+    ),
+  );
 }
 
 describe('HealthController', () => {
@@ -61,31 +66,29 @@ describe('HealthController 연결이 멈췄을 때', () => {
   });
 
   it('같은 순간의 요청은 한 번의 점검을 같이 쓴다', async () => {
-    const queryRaw = vi.fn(
-      () => new Promise((resolve) => setTimeout(() => resolve([]), 10)),
+    const ping = vi.fn(
+      () => new Promise<void>((resolve) => setTimeout(resolve, 10)),
     );
-    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
-    const client = {
-      ping: () => Promise.resolve('PONG'),
-    } as unknown as RedisService;
-    const health = new HealthController(prisma, client);
+    const health = new HealthController(
+      fakeDb(ping),
+      fakeRedis(() => Promise.resolve('PONG')),
+    );
     const results = await Promise.all([
       health.check(),
       health.check(),
       health.check(),
     ]);
     expect(results.every((r) => r.status === 'ok')).toBe(true);
-    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(ping).toHaveBeenCalledTimes(1);
   });
 
   it('응답이 없으면 시간 제한 뒤 503, 그동안 새 점검을 쌓지 않는다', async () => {
     vi.useFakeTimers();
-    const queryRaw = vi.fn(() => new Promise(() => {})); // 영원히 끝나지 않는 쿼리
-    const prisma = { $queryRaw: queryRaw } as unknown as PrismaService;
-    const client = {
-      ping: () => Promise.resolve('PONG'),
-    } as unknown as RedisService;
-    const health = new HealthController(prisma, client);
+    const ping = vi.fn(() => new Promise<void>(() => {})); // 영원히 끝나지 않는 점검
+    const health = new HealthController(
+      fakeDb(ping),
+      fakeRedis(() => Promise.resolve('PONG')),
+    );
 
     const first = health.check().catch((e: unknown) => e);
     await vi.advanceTimersByTimeAsync(2000);
@@ -107,6 +110,6 @@ describe('HealthController 연결이 멈췄을 때', () => {
         redis: 'up',
       });
     }
-    expect(queryRaw).toHaveBeenCalledTimes(1);
+    expect(ping).toHaveBeenCalledTimes(1);
   });
 });

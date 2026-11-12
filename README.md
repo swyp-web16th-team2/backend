@@ -36,6 +36,7 @@ curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 | `npm test` | 단위 테스트 |
 | `npm run test:e2e` | e2e 테스트. `.env`(없으면 환경 변수)의 `DATABASE_URL`·`REDIS_URL`로 실제 DB·Redis 연결까지 확인하고, 둘 중 하나라도 없으면 그 테스트만 건너뜁니다 |
 | `npm run lint` | 린트 |
+| `npm run typecheck` | 테스트 포함 전체 타입 검사(Vitest·린트는 타입 오류를 못 잡음) |
 
 ## Docker
 

@@ -65,12 +65,12 @@ describe.skipIf(!hasServices)('DB 연결이 조용히 끊겼다 복구될 때', 
       await request(app.getHttpServer()).get('/health').expect(503);
 
       proxy.setDrop(false);
-      // 멈춘 쿼리는 query_timeout(10초)에 끝나고 그 연결은 버려져서, 새 연결로 복구돼야 한다.
+      // 점검은 매번 새 연결을 쓰고 시간이 지나면 소켓을 끊기 때문에, 길이 다시 열리면 곧바로 복구돼야 한다.
       await vi.waitFor(
         async () => {
           await request(app.getHttpServer()).get('/health').expect(200);
         },
-        { timeout: 25_000, interval: 1000 },
+        { timeout: 15_000, interval: 500 },
       );
     } finally {
       await app.close();

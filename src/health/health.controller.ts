@@ -1,5 +1,5 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
-import { PrismaService } from '../db/prisma.service.js';
+import { DbHealthService } from '../db/db-health.service.js';
 import { RedisService } from '../redis/redis.service.js';
 
 const TIMEOUT_MS = 2000;
@@ -14,7 +14,7 @@ export class HealthController {
   private readonly shared = new Map<string, Promise<State>>();
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly db: DbHealthService,
     private readonly redis: RedisService,
   ) {}
 
@@ -47,7 +47,7 @@ export class HealthController {
   @Get()
   async check() {
     const [db, redis] = await Promise.all([
-      this.probe('db', () => this.prisma.$queryRaw`SELECT 1`),
+      this.probe('db', () => this.db.ping()),
       this.probe('redis', async () => {
         if ((await this.redis.ping()) !== 'PONG')
           throw new Error('PONG이 아님');
