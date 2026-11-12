@@ -162,16 +162,30 @@ jobs:
               files=$(git ls-tree -r --name-only "$GITHUB_SHA" -- prisma/migrations | grep '/migration\.sql$' || true)
               title="배포된 커밋을 비교할 수 없어 저장소의 모든 마이그레이션 SQL (이미 적용된 것은 건너뜁니다)"
             fi
+            # 승인자는 SQL을 전부 봐야 하므로 자르지 않는다. 요약 크기 한도(1 MiB)에 가까우면 조용히 넘어가지 않고 실패시킨다.
+            sql_total=0
+            while IFS= read -r f; do
+              [ -n "$f" ] || continue
+              sql_total=$((sql_total + $(git cat-file -s "$GITHUB_SHA:$f")))
+            done <<< "$files"
+            if [ "$sql_total" -gt 800000 ]; then
+              echo "적용할 SQL이 ${sql_total}바이트라 요약 화면에 다 담을 수 없습니다. 승인 전에 SQL 전체를 볼 수 없으므로 중단합니다. 사람이 확인해야 합니다."
+              exit 1
+            fi
             {
               echo "### 운영 DB에 적용 대기 중인 마이그레이션"
               echo "$title"
               echo
-              for f in $files; do
+              while IFS= read -r f; do
+                [ -n "$f" ] || continue
+                # SQL 안에 ``` 가 있어도 코드 블록이 중간에 닫히지 않게, 안에 나오는 가장 긴 백틱보다 긴 울타리를 쓴다.
+                fence=$(git show "$GITHUB_SHA:$f" | awk '{ while (match($0, /`+/)) { if (RLENGTH > m) m = RLENGTH; $0 = substr($0, RSTART + RLENGTH) } } END { n = m + 3; s = ""; for (k = 0; k < n; k++) s = s "`"; print s }')
                 echo "#### \`$f\`"
-                echo '```sql'
-                git show "$GITHUB_SHA:$f" | head -n 200
-                echo '```'
-              done
+                echo "${fence}sql"
+                git show "$GITHUB_SHA:$f"
+                echo
+                echo "$fence"
+              done <<< "$files"
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
