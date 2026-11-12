@@ -1,0 +1,33 @@
+# 로컬 개발용 Postgres와 Redis. 배포 환경(Supabase, k3s의 Redis)과는 별개다.
+# 이미 쓰고 있는 로컬 DB·Redis와 포트가 겹치지 않도록 기본 포트를 5433, 6380으로 두었다.
+# 바꾸려면 POSTGRES_PORT, REDIS_PORT 환경 변수를 준다.
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: swyp
+      POSTGRES_PASSWORD: swyp
+      POSTGRES_DB: swyp
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swyp -d swyp"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6380}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

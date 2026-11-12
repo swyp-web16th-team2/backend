@@ -1,0 +1,11 @@
+// Prisma 스키마. 모델은 기능을 만들 때 하나씩 추가하고 `npm run db:migrate`로 마이그레이션을 만든다.
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+  // import 확장자를 .js로 고정한다. 정하지 않으면 tsconfig.json을 읽어 정하는데, Docker 빌드의 npm ci 시점에는 그 파일이 없어 .ts로 만들어진다.
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -4,13 +4,27 @@ NestJS(TypeScript) 백엔드 서버입니다.
 
 ## 로컬 실행
 
+필요한 것: Node 22, Docker.
+
 ```bash
-npm install
-npm run start:dev   # http://localhost:3000
+cp .env.example .env            # 로컬용 설정(.env는 git에 올라가지 않음)
+docker compose up -d            # 로컬 Postgres(5433), Redis(6380)
+npm install                     # Prisma 클라이언트도 같이 만들어 줌(postinstall)
+npm run start:dev               # http://localhost:3001
+curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 ```
 
-- 포트는 환경 변수 `PORT`로 바꿀 수 있습니다. 기본값은 3000입니다.
-- 확인: `curl http://localhost:3000` → `Hello World!`
+- 포트는 `.env`의 `PORT`로 바꿉니다. React 개발 서버(3000)와 겹치지 않게 예시는 3001입니다.
+- 이미 쓰는 로컬 DB·Redis와 겹치면 `POSTGRES_PORT`, `REDIS_PORT`로 compose 포트를 바꾸고 `.env`의 주소도 맞춥니다.
+- 끄기: `docker compose down`, 데이터까지 지우기: `docker compose down -v`.
+
+## DB (Prisma)
+
+- 스키마는 `prisma/schema.prisma`에 모델을 추가하고 `npm run db:migrate`로 마이그레이션을 만듭니다(로컬 DB가 떠 있어야 함). 배포 환경에는 `npm run db:deploy`로 적용합니다.
+- Supabase에서는 `DATABASE_URL`에 트랜잭션 풀러(6543, `?pgbouncer=true`), `DIRECT_URL`에 풀러를 거치지 않는 연결을 씁니다. 홈서버는 IPv6가 안 되어 IPv4가 되는 세션 풀러(5432)를 씁니다.
+- `npm run db:migrate`·`db:deploy` 등 마이그레이션 명령은 `DIRECT_URL`이 없으면 연결하기 전에 실패합니다(앱용 트랜잭션 풀러로 마이그레이션이 가는 것을 막기 위해). `prisma generate`는 URL 없이 됩니다.
+- `DATABASE_URL`·`REDIS_URL`이 없으면 서버는 뜨지만 `/health`가 해당 항목을 down으로 답합니다. 이때 `PGHOST` 같은 기본 환경 변수나 기본 포트(6379)의 다른 DB·Redis에 붙지 않습니다.
+- `prisma init`은 쓰지 마세요. 에이전트용 파일을 저장소에 만들어 버립니다.
 
 ## CORS
 
@@ -22,8 +36,9 @@ npm run start:dev   # http://localhost:3000
 |---|---|
 | `npm run build` | 빌드 (`dist/`) |
 | `npm test` | 단위 테스트 |
-| `npm run test:e2e` | e2e 테스트 |
+| `npm run test:e2e` | e2e 테스트. `.env`(없으면 환경 변수)의 `DATABASE_URL`·`REDIS_URL`로 실제 DB·Redis 연결까지 확인하고, 둘 중 하나라도 없으면 그 테스트만 건너뜁니다 |
 | `npm run lint` | 린트 |
+| `npm run typecheck` | 테스트 포함 전체 타입 검사(Vitest·린트는 타입 오류를 못 잡음) |
 
 ## Docker
 
