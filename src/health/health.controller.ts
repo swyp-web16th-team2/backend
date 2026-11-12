@@ -49,6 +49,9 @@ export class HealthController {
     const [db, redis] = await Promise.all([
       this.probe('db', () => this.db.ping()),
       this.probe('redis', async () => {
+        // 주소가 없으면 연결을 시도하지 않는다(재연결·DNS 조회·경고 로그가 계속 생기는 것을 막는다).
+        if (!this.redis.configured)
+          throw new Error('REDIS_URL이 설정되지 않았습니다');
         if ((await this.redis.ping()) !== 'PONG')
           throw new Error('PONG이 아님');
       }),

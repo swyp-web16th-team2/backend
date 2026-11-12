@@ -8,8 +8,8 @@ function fakeDb(ping: () => Promise<void>) {
   return { ping } as unknown as DbHealthService;
 }
 
-function fakeRedis(ping: () => Promise<string>) {
-  return { ping } as unknown as RedisService;
+function fakeRedis(ping: () => Promise<string>, configured = true) {
+  return { ping, configured } as unknown as RedisService;
 }
 
 function controller(db: 'up' | 'down', redis: 'up' | 'down' | 'wrong') {
@@ -111,5 +111,24 @@ describe('HealthController 연결이 멈췄을 때', () => {
       });
     }
     expect(ping).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('HealthController Redis 주소가 설정되지 않았을 때', () => {
+  it('연결을 시도하지 않고 바로 down으로 답한다', async () => {
+    const ping = vi.fn(() => Promise.resolve('PONG'));
+    const health = new HealthController(
+      fakeDb(() => Promise.resolve()),
+      fakeRedis(ping, false),
+    );
+    const error = (await health
+      .check()
+      .catch((e: unknown) => e)) as ServiceUnavailableException;
+    expect(error.getResponse()).toEqual({
+      status: 'degraded',
+      db: 'up',
+      redis: 'down',
+    });
+    expect(ping).not.toHaveBeenCalled();
   });
 });
