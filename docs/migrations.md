@@ -5,10 +5,10 @@ DB 구조(테이블·컬럼)를 바꾸는 일은 코드와 달리 **한 번 적�
 ## 한눈에
 
 1. 모델을 바꾸면 **마이그레이션 파일을 만들어 코드와 같이 커밋**합니다. DB를 손으로 고치지 않습니다.
-2. **이미 병합된 마이그레이션은 고치거나 지우지 않습니다.** 잘못됐으면 새 마이그레이션으로 고칩니다. (PR에서 CI가 막습니다)
+2. **이미 병합된 마이그레이션은 고치거나 지우지 않습니다.** 잘못됐으면 새 마이그레이션으로 고칩니다.
 3. 생성된 `migration.sql`은 **병합 전에 눈으로 읽습니다.** 특히 컬럼 삭제·이름 변경.
 4. 운영(Supabase)에는 `npm run db:deploy`만 씁니다. `db:migrate`는 **로컬 DB 전용**입니다.
-5. 마이그레이션을 **빠뜨리지 않았는지는 사람이 확인**합니다(1절). CI가 막는 것은 "이미 있는 마이그레이션을 고치거나 지우거나 이름을 바꾼 것"뿐입니다.
+5. 마이그레이션을 **빠뜨리거나**, 이미 있는 마이그레이션을 **고치거나 지우거나 이름을 바꾸면** PR에서 CI가 막습니다(1절·3절).
 
 ## 1. 모델을 바꾸는 절차 (로컬)
 
@@ -26,12 +26,14 @@ npm test && npm run test:e2e               # 5) 테스트
 - **같이 커밋하는 것**: `prisma/schema.prisma` + 새 마이그레이션 폴더 + (처음 한 번) `prisma/migrations/migration_lock.toml`. 하나라도 빠지면 다른 사람 DB와 어긋납니다.
 - PR 본문에 **이 PR이 DB를 어떻게 바꾸는지, 데이터가 사라지는 변경이 있는지** 한 줄 적습니다.
 - 바뀐 게 없으면 `migrate dev`가 `Already in sync, no schema change or pending migration was found.`라고 하고 파일을 만들지 않습니다(확인함). 이 경우 마이그레이션 PR이 아닙니다.
-- **마이그레이션을 빠뜨리지 않았는지**는 PR을 올리기 전에 이렇게 확인합니다. 파일을 만들지도 DB를 바꾸지도 않는 읽기 전용 명령입니다(확인함).
+- **마이그레이션을 빠뜨리지 않았는지는 CI가 확인합니다.** 깨끗한 DB를 새로 만들어 마이그레이션만 적용하고 `schema.prisma`와 비교해서, 빠뜨린 변경이 있으면 PR이 실패합니다(확인함: 모델만 추가하고 마이그레이션을 빠뜨린 첫 PR도 잡힘). PR을 올리기 전에 로컬에서 먼저 확인하려면, 로컬 DB를 깨끗하게 다시 만든 뒤 같은 비교를 합니다(**로컬 데이터가 사라집니다**).
   ```bash
-  npm run db:deploy      # 내 로컬 DB를 마이그레이션 최신 상태로 맞춘 뒤
+  docker compose down -v && docker compose up -d   # 깨끗한 로컬 DB
+  npm run db:deploy                                 # 마이그레이션만으로 DB를 만들고
   npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
   ```
-  종료 코드 **0**(`No difference detected.`)이면 `schema.prisma`와 마이그레이션이 같습니다. **2**이면 마이그레이션에 없는 변경이 있는 것입니다(확인함: 컬럼을 추가하고 마이그레이션을 빠뜨리면 `Added column ...`과 함께 2). `--script`를 붙이면 필요한 SQL이 그대로 나옵니다. 그때는 1절의 `npm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다. **CI는 이것을 잡지 못합니다**(확인함: `schema.prisma`만 바꾸고 마이그레이션을 빠뜨려도 통과. Prisma 7의 `migrate diff --from-migrations`는 `prisma.config.ts`에 shadow DB 설정이 필요해서 넣지 않았습니다).
+  종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `npm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
+  - **깨끗하지 않은 DB에서 이 비교를 하면 빠뜨림을 놓칠 수 있습니다**(확인함: 로컬 DB에 손으로 컬럼을 추가하고 `schema.prisma`에도 추가했는데 마이그레이션은 없을 때, 현재 DB와 비교하면 종료 코드 0이 나오고 깨끗한 DB와 비교하면 2가 나옴. 코드 리뷰에서도 같은 결과). 위 로컬 확인은 반드시 `down -v` 뒤에 하세요.
 - 주의: `migrate dev --create-only`는 **바뀐 게 없어도 빈 마이그레이션 폴더를 만듭니다**(확인함). "바뀐 게 있는지" 확인하는 용도로 쓰지 마세요. 또 `migrate dev`는 만든 마이그레이션을 **바로 적용**하므로, 적용된 뒤에는 폴더 이름을 바꾸지 못합니다(3절). 이름은 처음부터 알맞게 정합니다.
 
 ## 2. 위험한 변경은 SQL을 먼저 보고 고칩니다
@@ -91,6 +93,7 @@ npx prisma migrate status
 
 - **`migrate status`는 DB를 손으로 바꾼 것(drift)을 알려주지 않습니다**(확인함: "Database schema is up to date!"). 구조가 의심되면 위의 `migrate diff`를 쓰고, 로컬에서는 `npm run db:migrate`가 drift를 알려 줍니다.
 - 로컬 DB를 처음부터 다시 만들기: `docker compose down -v` → `docker compose up -d` → `npm run db:deploy`(확인함: 빈 DB에서 마이그레이션이 전부 순서대로 적용됨). 로컬 데이터가 **모두 사라집니다.** (`npx prisma migrate reset`도 같은 일을 하는 공식 명령이며 직접 터미널에서 실행합니다.)
+- **`npx prisma`는 레포에 설치된 버전(7.10.1)을 써야 합니다.** `npm install`을 하지 않은 폴더에서 실행하면 npm의 **최신 버전**을 받아 실행하는데, 그 버전(8.0 rc)에서는 `migrate diff`가 다른 명령으로 옮겨졌다는 안내가 나왔습니다(확인함). Prisma를 올릴 때는 이 문서의 명령을 모두 다시 확인합니다.
 - AI 에이전트(Claude Code 등)로 개발할 때: Prisma 7은 에이전트가 `migrate reset` 같은 위험 명령을 실행하면 **사용자 동의 없이는 거부**합니다(확인함). 동의를 대신 넣어서 우회하지 말고 사람이 직접 판단해서 실행합니다.
 
 ## 6. 운영(Supabase)에 적용 — **결정 필요**
@@ -105,22 +108,26 @@ npx prisma migrate status
 
 **지금(임시) 방식 — 팀이 정할 때까지**: 마이그레이션이 들어간 PR을 **병합한 사람이 직접** 운영 DB에 적용하고 Riido task에 "적용함"을 남깁니다.
 
+**0) 최신 `main`에서 실행합니다.** `git switch main && git pull`을 하고, `git log -1 --oneline`이 방금 병합한 커밋인지, `ls prisma/migrations`에 이번 PR의 폴더가 있는지 확인합니다. 오래된 브랜치에서 실행하면 최신 마이그레이션이 파일에 없어서 **일부만 적용하고도 성공 메시지**가 나올 수 있습니다.
+
 ```bash
-# bash·zsh 모두 되는 형태입니다. 각 줄을 따로 실행하고, 2)의 출력을 읽어 판단한 뒤에만 3)으로 갑니다.
+# bash·zsh 모두 되는 형태입니다. 각 줄을 따로 실행하고, 2)와 4)의 출력을 읽어 판단한 뒤에만 다음으로 갑니다.
 printf '운영 DIRECT_URL: '; read -rs PROD_DIRECT_URL; echo                 # 1) 주소 입력(화면·셸 기록에 남지 않음)
 DIRECT_URL="$PROD_DIRECT_URL" npx prisma migrate status                   # 2) 대기 중인 마이그레이션 확인. 출력의 호스트가 운영 Supabase인지 사람이 확인
 DIRECT_URL="$PROD_DIRECT_URL" npm run db:deploy                           # 3) 확인했으면 적용
-unset PROD_DIRECT_URL                                                     # 4) 값 지우기
+DIRECT_URL="$PROD_DIRECT_URL" npx prisma migrate status                   # 4) 적용 확인: Database schema is up to date! (종료 코드 0)
+unset PROD_DIRECT_URL                                                     # 5) 값 지우기
 ```
 
 - **2)의 종료 코드로 판단하지 마세요.** `migrate status`는 대기 중인 마이그레이션이 있으면 정상이어도 **종료 코드 1**을 돌려줍니다(확인함). 출력으로 판단합니다.
-  - `Following migration have not yet been applied`와 아직 적용 안 된 이름들이 나오면 → 3)으로 갑니다.
-  - `Database schema is up to date!`이면 → 할 일이 없습니다.
-  - 연결 오류, `Following migration have failed`(실패 기록), `Your local migration history and the migrations table from your database are different`(이력 불일치)가 나오면 → **멈추고** 팀에 알립니다(7절).
+  - `Following migration(s) have not yet been applied`(대기가 하나면 단수, 여러 개면 복수로 나옵니다)와 아직 적용 안 된 이름들이 나오면 → 이번 PR의 폴더 이름인지 확인하고 3)으로 갑니다.
+  - `Database schema is up to date!`이면 → 이미 적용된 것입니다. 할 일이 없습니다.
+  - 연결 오류, 호스트가 운영이 아님, `Your local migration history and the migrations table from your database are different`(이력 불일치)가 나오면 → **멈추고** 팀에 알립니다(7절).
+  - **`status`가 대기 목록만 보여 주고 "실패한 마이그레이션 기록"은 알려 주지 않을 수 있습니다**(코드 리뷰에서 재현됨: 실패 기록이 남은 DB에 뒤따르는 대기분이 있으면 대기 목록만 출력). 그래도 괜찮은 이유는 3)의 `db:deploy`가 실패 기록이 있으면 **아무것도 적용하지 않고 `P3009`로 멈추기** 때문입니다(확인함). `P3009`가 나오면 7절로 갑니다.
+- **4)가 `Database schema is up to date!`(종료 코드 0)일 때만 Riido에 "운영 적용함"을 기록합니다.** 3)이 성공 메시지를 냈어도 오래된 작업 트리였다면 일부만 적용됐을 수 있고, 4)가 그것을 잡습니다.
 - 주소는 `export`하지 않고 **명령마다** `DIRECT_URL="..."`로만 넘깁니다. 그래서 값은 그 명령 하나의 환경에만 들어가고 `.env` 파일에는 기록되지 않습니다. 다만 입력한 값은 `unset` 전까지 그 셸의 변수에 남아 있습니다.
 - **입력이 실패하거나 빈 값이면 `.env`의 로컬 주소로 대신 실행되지 않습니다**(확인함: 빈 값으로라도 정의된 환경 변수는 `.env`가 덮어쓰지 않고, 빈 `DIRECT_URL`이면 마이그레이션 명령이 연결 전에 실패합니다). 2)의 출력에서 호스트를 꼭 눈으로 확인합니다. 로컬(`localhost`)이면 멈춥니다.
 - `export DIRECT_URL`로 쓰지 마세요. 입력이 실패했는데 변수가 정의되지 않은 상태라면 `.env`의 로컬 주소가 대신 쓰입니다(확인함).
-- **Riido에 "운영 적용함"을 쓰는 것은 3)이 성공(`All migrations have been successfully applied`)한 것을 본 뒤에** 합니다.
 
 | 방식 | 장점 | 단점 |
 |---|---|---|
@@ -134,7 +141,7 @@ unset PROD_DIRECT_URL                                                     # 4) �
 |---|---|
 | `DIRECT_URL이 필요합니다` | `.env`에 `DIRECT_URL`이 없습니다. `.env.example`을 참고해 넣습니다 |
 | `The migration ... was modified after it was applied` | 적용된 마이그레이션 파일을 고쳤습니다. `git checkout`으로 원래대로 되돌리고 새 마이그레이션을 추가합니다 |
-| `Error: P3009` / `Following migration have failed` | 이전에 적용하다 **중간에 실패한 마이그레이션이 DB에 "실패" 기록으로 남아 있어** 이후 `deploy`가 막힌 상태입니다(확인함). **먼저 DB가 부분적으로 적용된 상태인지, 데이터가 어떤지 확인**하세요. `resolve`는 SQL을 되돌리는 명령이 아니라 **기록만 바꿉니다.** DB를 손으로 원래대로 돌렸다면 `--rolled-back`, 손으로 끝까지 적용했다면 `--applied`로 정리합니다(`--rolled-back`으로 풀리는 것 확인함). **운영에서는 6절처럼 대상 주소를 명령마다 직접 넘기고** 출력의 호스트를 확인합니다: `DIRECT_URL="$PROD_DIRECT_URL" npx prisma migrate resolve --rolled-back "<마이그레이션 이름>"`. 주소를 빼면 `.env`의 **로컬 DB**의 기록을 바꾸게 되어 운영 문제는 그대로 남습니다. DB를 직접 건드리기 전에 팀에 먼저 알립니다 |
+| `Error: P3009` / `Following migration have failed` | 이전에 적용하다 **중간에 실패한 마이그레이션이 DB에 "실패" 기록으로 남아 있어** 이후 `deploy`가 막힌 상태입니다(확인함). **먼저 DB가 부분적으로 적용된 상태인지, 데이터가 어떤지 확인**하세요. `resolve`는 SQL을 되돌리는 명령이 아니라 **기록만 바꾸고, 실행하고 나면 취소하기 어렵습니다**(코드 리뷰에서 재현됨: 일부 SQL이 적용된 채로도 기록은 바로 바뀌고 이미 만든 테이블은 그대로 남음). DB를 손으로 원래대로 돌렸다면 `--rolled-back`, 손으로 끝까지 적용했다면 `--applied`로 정리합니다(`--rolled-back`으로 풀리는 것 확인함). **운영에서는 `resolve`를 실행하기 전에** (1) 6절 1)처럼 운영 주소를 다시 입력하고(이미 지웠다면), (2) `DIRECT_URL="$PROD_DIRECT_URL" npx prisma migrate status`로 **호스트와 실패한 마이그레이션 이름을 눈으로 확인한 뒤**, (3) 같은 변수로 `DIRECT_URL="$PROD_DIRECT_URL" npx prisma migrate resolve --rolled-back "<마이그레이션 이름>"`을 실행합니다. 주소를 빼면 `.env`의 **로컬 DB**의 기록을 바꾸게 되어 운영 문제는 그대로 남습니다. DB를 직접 건드리기 전에 팀에 먼저 알립니다 |
 | `Drift detected` | 누군가 DB를 직접 바꿨습니다. 로컬은 초기화, 운영은 `migrate diff`로 차이를 확인한 뒤 **새 마이그레이션으로 맞춥니다** |
 | 새 모델이 코드에서 안 보임 / 타입 오류 | `npm run db:generate`를 안 했습니다 |
 | `Error: Prisma Migrate detected that it was invoked by Claude Code` | Prisma의 에이전트 안전장치입니다. 사람이 직접 실행하거나 동의합니다 |

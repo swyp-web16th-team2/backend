@@ -67,6 +67,15 @@ jobs:
             echo "$changed"
             exit 1
           fi
+      # schema.prisma만 바꾸고 마이그레이션을 빠뜨리면 코드와 DB가 어긋난다. 깨끗한 DB를 새로 만들어 마이그레이션만 적용한 뒤
+      # schema.prisma와 비교해서 잡는다(내 로컬 DB에 남은 수동 변경에 가려지지 않는다). 모델이 아직 없는 지금 상태에서도 통과한다.
+      - name: schema.prisma와 마이그레이션이 같은지 확인
+        env:
+          DIRECT_URL: postgresql://swyp:swyp@localhost:5432/swyp_migration_check
+        run: |
+          PGPASSWORD=swyp psql -h localhost -U swyp -d swyp -v ON_ERROR_STOP=1 -c 'CREATE DATABASE swyp_migration_check'
+          npx prisma migrate deploy
+          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - run: npm run build
       - run: npm test
       - run: npm run test:e2e
