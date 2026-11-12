@@ -116,14 +116,85 @@ jobs:
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
           cache-from: type=gha
 
+  # 이 커밋을 배포하기 전에 운영 DB에 적용할 마이그레이션이 있는지 판단한다. DB 접속 정보는 쓰지 않는다.
+  # 지금 배포된(infra에 적힌) 커밋과 비교해 prisma/migrations가 달라졌으면 적용 대상으로 본다.
+  # 판단할 수 없으면(배포된 커밋을 못 읽거나 갈라진 기록 등) 적용 쪽(사람 승인)으로 기운다.
+  migrate-plan:
+    needs: check
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.plan.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # 배포된 커밋과의 조상 관계를 보려면 전체 기록이 필요하다
+      - name: 적용할 마이그레이션이 있는지 확인
+        id: plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          changed=true
+          deployed=$(gh api repos/swyp-web16th-team2/infra/contents/apps/backend/deployment.yaml --jq .content | base64 -d \
+            | grep -Eo "ghcr\.io/${GITHUB_REPOSITORY}:[0-9a-f]{40}" | sort -u || true)
+          if [ "$(printf '%s\n' "$deployed" | grep -c .)" = 1 ]; then
+            sha=${deployed##*:}
+            if git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              if git merge-base --is-ancestor "$GITHUB_SHA" "$sha"; then
+                changed=false # 이 커밋은 지금 배포된 것과 같거나 더 오래됐다(deploy도 건너뛴다).
+              elif git merge-base --is-ancestor "$sha" "$GITHUB_SHA"; then
+                if [ -z "$(git diff --name-only "$sha" "$GITHUB_SHA" -- prisma/migrations)" ]; then changed=false; fi
+              fi
+            fi
+          fi
+          echo "배포된 커밋: ${deployed:-읽지 못함}, 적용할 마이그레이션 있음: $changed"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+  # 운영 DB에 마이그레이션을 적용한다. production 환경의 승인자가 승인해야 시작하고,
+  # DIRECT_URL 시크릿은 이 환경에 있어서 main 브랜치의 이 작업에서만 읽을 수 있다.
+  # 이 작업이 성공하거나 건너뛰어져야 deploy가 돈다(DB가 새 코드보다 먼저 바뀐다).
+  migrate:
+    needs: [publish, migrate-plan]
+    if: github.event_name == 'push' && needs.migrate-plan.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: db-migrate
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: 운영 DB에 마이그레이션 적용
+        shell: bash
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DIRECT_URL// /}" ]; then
+            echo "production 환경 시크릿 DIRECT_URL이 없습니다. 레포 Settings > Environments > production에 넣어야 합니다(docs/migrations.md 6절)."
+            exit 1
+          fi
+          # 적용 안 된 마이그레이션만 순서대로 적용한다. 되돌리는 기능은 없다. 비밀번호는 GitHub이 로그에서 가린다.
+          npx prisma migrate deploy
+
   # 이 커밋의 이미지를 infra 레포의 이미지 태그로 반영해 Argo CD가 자동 배포하게 한다.
   # 단, 이 커밋이 지금 배포된 버전보다 "앞선" 커밋일 때만 바꾼다. 그래서 늦게 끝난 옛 실행이나 재실행이
   # 새 버전을 옛 버전으로 되돌리지 못한다. 이 작업은 저장소 전체에서 한 번에 하나만 돌고,
   # 대기 중인 작업은 취소되지 않고 줄을 선다(queue: max).
   # 이 키로 CI가 infra를 바꿀 수 있으므로 키는 이 작업에서만 쓴다(main 병합 때만 실행).
   deploy:
-    needs: publish
-    if: github.event_name == 'push'
+    needs: [publish, migrate-plan, migrate]
+    # migrate는 마이그레이션이 없으면 건너뛰어진다. 실패하거나 승인되지 않으면 배포하지 않는다.
+    if: ${{ !cancelled() && github.event_name == 'push' && needs.publish.result == 'success' && needs.migrate-plan.result == 'success' && (needs.migrate.result == 'success' || needs.migrate.result == 'skipped') }}
     runs-on: ubuntu-latest
     concurrency:
       group: infra-deploy
