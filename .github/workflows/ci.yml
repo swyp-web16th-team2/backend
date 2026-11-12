@@ -59,7 +59,9 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: |
-          changed=$(git diff --name-status "origin/${BASE_REF}...HEAD" -- prisma/migrations | grep -v '^A' || true)
+          # git diff가 실패하면(기준 브랜치를 못 찾는 등) 여기서 바로 실패한다. 파이프에 넣으면 실패가 묻힌다.
+          git diff --name-status "origin/${BASE_REF}...HEAD" -- prisma/migrations > "$RUNNER_TEMP/migration-diff.txt"
+          changed=$(grep -v '^A' "$RUNNER_TEMP/migration-diff.txt" || true)
           if [ -n "$changed" ]; then
             echo "::error::이미 있는 마이그레이션 파일이 바뀌었습니다. 새 마이그레이션을 추가하세요(docs/migrations.md)."
             echo "$changed"
