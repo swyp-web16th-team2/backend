@@ -8,6 +8,8 @@ export class RedisService extends Redis implements OnModuleDestroy {
     super(process.env.REDIS_URL ?? 'redis://127.0.0.1:6380', {
       lazyConnect: true,
       maxRetriesPerRequest: 1,
+      connectTimeout: 5000,
+      commandTimeout: 3000, // 응답이 없는 명령은 3초 뒤 실패시킨다
       retryStrategy: (times) => Math.min(times * 500, 5000),
     });
     const logger = new Logger(RedisService.name);

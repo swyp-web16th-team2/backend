@@ -34,7 +34,7 @@ curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 |---|---|
 | `npm run build` | 빌드 (`dist/`) |
 | `npm test` | 단위 테스트 |
-| `npm run test:e2e` | e2e 테스트(`DATABASE_URL`·`REDIS_URL`이 있으면 실제 DB·Redis 연결까지 확인) |
+| `npm run test:e2e` | e2e 테스트. `.env`(없으면 환경 변수)의 `DATABASE_URL`·`REDIS_URL`로 실제 DB·Redis 연결까지 확인하고, 둘 중 하나라도 없으면 그 테스트만 건너뜁니다 |
 | `npm run lint` | 린트 |
 
 ## Docker
