@@ -2,7 +2,11 @@
 
 NestJS(TypeScript) 백엔드 서버입니다.
 
+**처음 합류했다면 [온보딩 가이드](docs/onboarding.md)부터 보세요.** `./scripts/setup.sh` 하나로 로컬 환경이 갖춰집니다.
+
 ## 로컬 실행
+
+한 번에 하려면 `./scripts/setup.sh`를 실행합니다(도구 확인, `.env`, 포트 충돌 피하기, 설치, Postgres·Redis 실행, 마이그레이션, 테스트). 아래는 설치부터 서버 실행까지를 손으로 하는 순서입니다(마이그레이션 적용과 테스트 확인은 스크립트가 해 줍니다).
 
 필요한 것: Node 22, Docker.
 
