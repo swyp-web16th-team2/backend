@@ -15,6 +15,8 @@ die() { printf '\n[중단] %s\n' "$*" >&2; exit 1; }
 # 셸에 운영 주소가 export돼 있으면 .env의 로컬 주소보다 우선해서 운영 DB에 명령이 갈 수 있다(docs/migrations.md).
 # 그래서 이 스크립트 안에서는 관련 환경 변수를 모두 지운다.
 unset DATABASE_URL DIRECT_URL REDIS_URL PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
+# 포트와 compose 설정도 셸 값이 .env보다 우선해서 연결 대상이 어긋나므로 지운다. 포트는 .env에서만 바꾼다.
+unset POSTGRES_PORT REDIS_PORT COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES
 
 say "1/6 필요한 도구 확인"
 for c in git node npm docker; do
@@ -34,7 +36,7 @@ else
   echo ".env.example을 복사해 .env를 만들었습니다."
 fi
 
-env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- || true; }
+env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '\r' | sed 's/[[:space:]]*$//' || true; }
 env_set() { # 키가 있으면 값을 바꾸고 없으면 맨 아래에 추가한다. macOS·Linux sed 차이를 피하려고 임시 파일을 쓴다.
   local tmp; tmp=$(mktemp)
   if grep -qE "^$1=" .env; then sed "s|^$1=.*|$1=$2|" .env > "$tmp"; else { cat .env; echo "$1=$2"; } > "$tmp"; fi
@@ -42,14 +44,22 @@ env_set() { # 키가 있으면 값을 바꾸고 없으면 맨 아래에 추가�
 }
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 our_service_running() { [ -n "$(docker compose ps --status running -q "$1" 2>/dev/null)" ]; }
-free_port_from() { local p=$1; while port_busy "$p"; do p=$((p + 1)); [ "$p" -lt $(($1 + 50)) ] || die "비어 있는 포트를 못 찾았습니다($1~$p)."; done; echo "$p"; }
+# 시작 포트부터 비어 있는 포트를 찾는다. 이미 쓰는 포트(port_busy)와, 두 번째·세 번째 인자로 준 포트(다른 서비스 몫)는 건너뛴다.
+free_port_from() {
+  local p=$1 skip1=${2:-} skip2=${3:-}
+  while port_busy "$p" || [ "$p" = "$skip1" ] || [ "$p" = "$skip2" ]; do
+    p=$((p + 1)); [ "$p" -lt $(($1 + 50)) ] || die "비어 있는 포트를 못 찾았습니다($1~$p)."
+  done
+  echo "$p"
+}
 
-# 이 스크립트는 로컬용이다. .env가 로컬이 아닌 DB를 가리키면 마이그레이션을 적용하지 않고 멈춘다.
+# 이 스크립트는 로컬용이다. .env의 DB 주소를 실제로 파싱해서 접속 호스트가 localhost·127.0.0.1이 아니거나
+# 쿼리로 호스트를 바꾸는 값(host, hostaddr)이 있으면 마이그레이션을 적용하지 않고 멈춘다.
+is_local_url() {
+  node -e 'try { const u = new URL(process.argv[1]); process.exit(["localhost", "127.0.0.1"].includes(u.hostname) && !u.searchParams.has("host") && !u.searchParams.has("hostaddr") ? 0 : 1); } catch { process.exit(1); }' "$1"
+}
 for k in DATABASE_URL DIRECT_URL; do
-  case "$(env_get "$k")" in
-    postgresql://*@localhost:*|postgresql://*@127.0.0.1:*) ;;
-    *) die ".env의 $k 가 로컬(localhost) 주소가 아닙니다. 운영 주소는 .env에 넣지 않습니다. .env를 지우고 다시 실행하거나 $k 를 로컬 주소로 고치세요." ;;
-  esac
+  is_local_url "$(env_get "$k")" || die ".env의 $k 가 로컬(localhost) 주소가 아닙니다. 운영 주소는 .env에 넣지 않습니다. .env를 지우고 다시 실행하거나 $k 를 로컬 주소로 고치세요."
 done
 
 say "3/6 포트 확인"
@@ -58,14 +68,14 @@ redis_port=$(env_get REDIS_PORT); redis_port=${redis_port:-6380}
 if our_service_running postgres; then
   echo "Postgres는 이미 이 프로젝트의 컨테이너가 실행 중입니다(포트 $pg_port)."
 elif port_busy "$pg_port"; then
-  new=$(free_port_from "$((pg_port + 1))")
+  new=$(free_port_from "$((pg_port + 1))" "$redis_port")
   echo "Postgres 포트 $pg_port 는 다른 프로그램이 쓰고 있어서 $new 를 씁니다(.env에 기록)."
   pg_port=$new
 fi
 if our_service_running redis; then
   echo "Redis는 이미 이 프로젝트의 컨테이너가 실행 중입니다(포트 $redis_port)."
 elif port_busy "$redis_port"; then
-  new=$(free_port_from "$((redis_port + 1))")
+  new=$(free_port_from "$((redis_port + 1))" "$pg_port")
   echo "Redis 포트 $redis_port 는 다른 프로그램이 쓰고 있어서 $new 를 씁니다(.env에 기록)."
   redis_port=$new
 fi
