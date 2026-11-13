@@ -50,17 +50,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint
-      # oxlint의 no-restricted-imports는 `import('...')` 타입 쿼리를 못 본다. 그 구멍만 여기서 막는다.
+      # oxlint의 no-restricted-imports는 `import('...')` 같은 타입 쿼리를 못 본다. 그래서 문법을 따지지 않고,
+      # Prisma를 가리키는 문자열이 허용된 파일 밖에 나오면 실패시킨다(공백, require, 타입 쿼리, 주석 모두 해당).
       # 허용 범위는 .oxlintrc.json의 overrides와 같게 둔다(Repository, db 폴더, 테스트, 생성된 클라이언트).
-      - name: Repository 밖에서 Prisma 타입 쿼리를 쓰지 않는지 확인
+      - name: Repository 밖에서 Prisma를 가리키지 않는지 확인
         shell: bash
         run: |
           files=$(git ls-files 'src/*.ts' 'test/*.ts' | grep -vE '^src/generated/|^src/db/|^src/infra/db/|^test/|\.repository(\.spec)?\.ts$' || true)
-          if [ -n "$files" ] && printf '%s\n' "$files" | xargs grep -nE "import\(['\"][^'\"]*(generated/prisma|@prisma/)"; then
-            echo "위 파일은 Repository 밖에서 Prisma 타입을 import()로 가져옵니다(docs/architecture.md 3절)."
+          if [ -n "$files" ] && printf '%s\n' "$files" | xargs grep -nE 'generated/prisma|@prisma/|prisma\.service'; then
+            echo "위 줄은 Repository 밖에서 Prisma를 가리킵니다. 주석에도 쓰지 않습니다(docs/architecture.md 3절)."
             exit 1
           fi
-      # 테스트 코드까지 포함한 전체 타입 검사. Vitest와 린트는 타입 오류를 잡지 못한다.
       - run: npm run typecheck
       # 이미 병합된 마이그레이션을 고치거나 지우면 운영 DB에 적용하는 migrate deploy가 아무 경고 없이 넘어간다.
       # 그래서 PR에서 막는다. 새 마이그레이션을 추가하는 것만 허용한다(docs/migrations.md).
