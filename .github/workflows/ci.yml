@@ -56,7 +56,7 @@ jobs:
       - name: Repository 밖에서 Prisma를 가리키지 않는지 확인
         shell: bash
         run: |
-          files=$(git ls-files 'src/*.ts' 'test/*.ts' | grep -vE '^src/generated/|^src/db/|^src/infra/db/|^test/|\.repository(\.spec)?\.ts$' || true)
+          files=$(git ls-files src test | grep -vE '^src/generated/|^src/db/|^src/infra/db/|^test/|\.repository(\.spec)?\.ts$' || true)
           if [ -n "$files" ] && printf '%s\n' "$files" | xargs grep -nE 'generated/prisma|@prisma/|prisma\.service'; then
             echo "위 줄은 Repository 밖에서 Prisma를 가리킵니다. 주석에도 쓰지 않습니다(docs/architecture.md 3절)."
             exit 1
