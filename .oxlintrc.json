@@ -2,9 +2,54 @@
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "rules": {
     "typescript/no-explicit-any": "off",
-    "typescript/no-floating-promises": "error"
+    "typescript/no-floating-promises": "error",
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@prisma/client",
+            "message": "Prisma 타입은 Repository와 db 폴더에서만 import합니다(docs/architecture.md 3절)."
+          },
+          {
+            "name": "@prisma/adapter-pg",
+            "message": "Prisma 어댑터는 db 폴더에서만 import합니다(docs/architecture.md 3절)."
+          }
+        ],
+        "patterns": [
+          {
+            "group": [
+              "**/generated/prisma",
+              "**/generated/prisma/**"
+            ],
+            "message": "Prisma 타입은 Repository와 db 폴더에서만 import합니다(docs/architecture.md 3절)."
+          },
+          {
+            "group": [
+              "**/db/prisma.service",
+              "**/db/prisma.service.js"
+            ],
+            "message": "PrismaService는 Repository와 db 폴더에서만 import합니다. Service는 Repository를 쓰세요(docs/architecture.md 3절)."
+          }
+        ]
+      }
+    ]
   },
   "env": {
     "node": true
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/**/*.repository.ts",
+        "src/**/*.repository.spec.ts",
+        "src/db/**",
+        "src/infra/db/**",
+        "test/**"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
 }
