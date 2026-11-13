@@ -39,11 +39,13 @@ fi
 env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '\r' | sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true; }
 env_set() { # 키가 있으면 값을 바꾸고 없으면 맨 아래에 추가한다. macOS·Linux sed 차이를 피하려고 임시 파일을 쓴다.
   local tmp; tmp=$(mktemp)
-  if grep -qE "^$1=" .env; then sed "s|^$1=.*|$1=$2|" .env > "$tmp"; else { cat .env; echo "$1=$2"; } > "$tmp"; fi
+  if grep -qE "^$1=" .env; then sed "s|^$1=.*|$1=$2|" .env > "$tmp"; else { cat .env; [ -z "$(tail -c1 .env)" ] || echo; echo "$1=$2"; } > "$tmp"; fi
   cat "$tmp" > .env; rm -f "$tmp"
 }
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 our_service_running() { [ -n "$(docker compose ps --status running -q "$1" 2>/dev/null)" ]; }
+# 이 프로젝트의 컨테이너가 실행 중이고, 실제로 게시한 호스트 포트가 .env의 포트와 같을 때만 "이미 우리 것"으로 본다.
+our_service_on_port() { our_service_running "$1" && [ "$(docker compose port "$1" "$2" 2>/dev/null | sed 's/.*://')" = "$3" ]; }
 # 시작 포트부터 비어 있는 포트를 찾는다. 이미 쓰는 포트(port_busy)와, 두 번째·세 번째 인자로 준 포트(다른 서비스 몫)는 건너뛴다.
 free_port_from() {
   local p=$1 skip1=${2:-} skip2=${3:-}
@@ -55,8 +57,11 @@ free_port_from() {
 
 # compose 프로젝트 이름이 같으면(폴더 이름이 같은 다른 체크아웃, 다른 프로젝트의 backend 폴더) 컨테이너와 볼륨을 서로 공유해서
 # 한쪽의 'docker compose down -v'가 다른 쪽 데이터를 지운다. 그래서 체크아웃 경로마다 다른 이름을 .env에 한 번만 적어 둔다.
-if [ -z "$(env_get COMPOSE_PROJECT_NAME)" ]; then
-  env_set COMPOSE_PROJECT_NAME "swyp-backend-$(node -p 'require("crypto").createHash("sha1").update(process.argv[1]).digest("hex").slice(0, 8)' "$PWD")"
+expected_name="swyp-backend-$(node -p 'require("crypto").createHash("sha1").update(process.argv[1]).digest("hex").slice(0, 8)' "$PWD")"
+current_name=$(env_get COMPOSE_PROJECT_NAME)
+if [ "$current_name" != "$expected_name" ]; then
+  [ -z "$current_name" ] || echo "(.env의 compose 프로젝트 이름 $current_name 은 이 폴더 것이 아니라서 $expected_name 으로 바꿉니다. 다른 폴더에서 복사한 .env이거나 폴더를 옮긴 경우입니다.)"
+  env_set COMPOSE_PROJECT_NAME "$expected_name"
 fi
 echo "compose 프로젝트 이름: $(env_get COMPOSE_PROJECT_NAME)"
 
@@ -72,14 +77,14 @@ done
 say "3/6 포트 확인"
 pg_port=$(env_get POSTGRES_PORT); pg_port=${pg_port:-5433}
 redis_port=$(env_get REDIS_PORT); redis_port=${redis_port:-6380}
-if our_service_running postgres; then
+if our_service_on_port postgres 5432 "$pg_port"; then
   echo "Postgres는 이미 이 프로젝트의 컨테이너가 실행 중입니다(포트 $pg_port)."
 elif port_busy "$pg_port"; then
   new=$(free_port_from "$((pg_port + 1))" "$redis_port")
   echo "Postgres 포트 $pg_port 는 다른 프로그램이 쓰고 있어서 $new 를 씁니다(.env에 기록)."
   pg_port=$new
 fi
-if our_service_running redis; then
+if our_service_on_port redis 6379 "$redis_port"; then
   echo "Redis는 이미 이 프로젝트의 컨테이너가 실행 중입니다(포트 $redis_port)."
 elif port_busy "$redis_port"; then
   new=$(free_port_from "$((redis_port + 1))" "$pg_port")
