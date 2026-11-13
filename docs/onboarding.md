@@ -21,7 +21,7 @@ cd backend
 | 프로그램 | 버전 | 확인 |
 |---|---|---|
 | git | 아무거나 | `git --version` |
-| Node.js | **22 이상** | `node -v` |
+| Node.js | **22.12 이상의 22.x, 또는 24 이상**(23은 안 됨). 개발 도구까지 맞추려면 22.22.3 이상의 22.x, 24.15 이상의 24.x, 26 이상 | `node -v` |
 | Docker | Docker Desktop 최신(`docker compose` 명령이 되는 것) | `docker compose version` |
 
 - Windows는 WSL2 안에서 실행하는 것을 권합니다. 이 스크립트는 bash가 필요합니다. Windows에서 실제로 돌려 보지는 않았습니다.
@@ -42,7 +42,12 @@ cd backend
 끝나면 서버를 띄워 봅니다.
 
 ```bash
-npm run start:dev                 # 서버 실행(코드를 고치면 자동 재시작)
+npm run start:dev                 # 서버 실행(코드를 고치면 자동 재시작). 이 터미널은 서버가 계속 씁니다.
+```
+
+다른 터미널을 열어서 확인합니다. 주소의 3001은 `.env`의 `PORT` 값입니다.
+
+```bash
 curl localhost:3001/health        # {"status":"ok","db":"up","redis":"up"}가 나오면 정상
 ```
 
@@ -86,7 +91,7 @@ PR이 `main`에 병합되면 자동으로 이미지가 만들어져 서버에 �
 | 증상 | 해결 |
 |---|---|
 | `Docker가 실행 중이 아닙니다` | Docker Desktop을 켜고 다시 실행합니다. |
-| `Node 22 이상이 필요합니다` | `nvm install 22 && nvm use 22` 후 다시 실행합니다. |
+| `Node … 는 Prisma가 지원하지 않습니다` | `nvm install 22 && nvm use 22` 후 다시 실행합니다. |
 | 포트가 겹친다는 메시지 | 스크립트가 알아서 다른 포트를 고르고 `.env`에 적습니다. 그래도 안 되면 `.env`의 `POSTGRES_PORT`, `REDIS_PORT`를 직접 바꿉니다. |
 | `.env의 DIRECT_URL 가 로컬(localhost) 주소가 아닙니다` | `.env`를 지우고 스크립트를 다시 실행합니다. |
 | `/health`에서 `db` 또는 `redis`가 `down` | `docker compose ps`로 컨테이너가 떠 있는지 봅니다. 꺼져 있으면 `docker compose up -d`. |

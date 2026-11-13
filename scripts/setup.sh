@@ -22,8 +22,18 @@ say "1/6 필요한 도구 확인"
 for c in git node npm docker; do
   command -v "$c" >/dev/null 2>&1 || die "$c 가 설치되어 있지 않습니다. docs/onboarding.md의 '준비물'을 먼저 확인하세요."
 done
-node_major=$(node -p 'process.versions.node.split(".")[0]')
-[ "$node_major" -ge 22 ] || die "Node 22 이상이 필요합니다(지금 $(node -v)). nvm을 쓴다면 'nvm install 22 && nvm use 22' 후 다시 실행하세요."
+# Node 범위는 package-lock.json의 engines 기준이다. Prisma는 ^22.12 || >=24(23은 제외)를 요구해서 못 맞으면 멈추고,
+# Nest CLI 쪽 개발 도구는 ^22.22.3 || ^24.15 || >=26이라 못 맞으면 경고만 한다(설치는 되지만 지원 범위 밖).
+node_level() { # 0=충분, 1=동작은 하지만 개발 도구 권장 범위 밖, 2=Prisma가 지원하지 않음
+  node -e 'const [a, b, c] = process.argv[1].split(".").map(Number);
+    const prisma = (a === 22 && b >= 12) || a >= 24;
+    const tools = (a === 22 && (b > 22 || (b === 22 && c >= 3))) || (a === 24 && b >= 15) || a >= 26;
+    process.exit(!prisma ? 2 : !tools ? 1 : 0);' "$1"
+}
+node_ver=$(node -p 'process.versions.node')
+set +e; node_level "$node_ver"; level=$?; set -e
+[ "$level" -ne 2 ] || die "Node $node_ver 는 Prisma가 지원하지 않습니다(22.12 이상의 22.x, 또는 24 이상. 23은 안 됩니다). nvm을 쓴다면 'nvm install 22 && nvm use 22' 후 다시 실행하세요."
+[ "$level" -ne 1 ] || echo "[주의] Node $node_ver 는 개발 도구(Nest CLI 등)의 지원 범위(22.22.3 이상의 22.x, 24.15 이상의 24.x, 26 이상) 밖입니다. 지금은 계속 진행하지만, 이상한 오류가 나면 'nvm install 22'로 최신 22.x로 올리세요."
 docker compose version >/dev/null 2>&1 || die "'docker compose' 명령이 없습니다. Docker Desktop을 최신으로 설치하거나 compose v2 플러그인을 설치하세요."
 docker info >/dev/null 2>&1 || die "Docker가 실행 중이 아닙니다. Docker Desktop을 켠 뒤 다시 실행하세요."
 echo "node $(node -v), npm $(npm -v), $(docker compose version --short 2>/dev/null || echo compose)"
