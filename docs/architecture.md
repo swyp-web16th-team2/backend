@@ -50,7 +50,13 @@ Controller → Service → Repository → PrismaService(infra/db)
 - Prisma를 가져와도 되는 곳은 Repository(`*.repository.ts`), `db` 폴더(지금은 `src/db`, 옮긴 뒤에는 `infra/db`), 테스트, 생성된 클라이언트뿐입니다. `generated/prisma`, `@prisma/client`, `@prisma/adapter-pg`(하위 경로 포함), `PrismaService`를 그 밖에서 가져오면 oxlint(`.oxlintrc.json`의 `no-restricted-imports`)가 막고, `require`는 `no-require-imports`가 막습니다. oxlint가 못 보는 `import('...')` 타입 쿼리 같은 경우는 CI 단계 "Repository 밖에서 Prisma를 가리키지 않는지 확인"이 막습니다. 이 단계는 문법을 따지지 않고 `generated/prisma`, `@prisma/`, `prisma.service`라는 문자열이 허용된 파일 밖에 나오면 실패시키므로, 주석에도 이 문자열을 쓰지 않습니다. 린트로 못 막는 것은 두 가지이고 리뷰에서 확인합니다. (1) Repository가 Prisma 타입을 자기 반환 타입으로 내보내 Service가 받아 쓰는 경우, (2) 파일 이름만 `.repository.ts`로 붙여 규칙을 피하는 경우.
 - **API 응답은 엔티티와 별개인 응답 DTO**입니다. Controller가 엔티티를 응답 DTO로 바꿔 내보내므로, DB 컬럼 이름과 내부 컬럼(비밀번호 해시, 내부 관리용 값)이 응답에 새지 않고, DB 구조가 바뀌어도 API 모양은 그대로입니다. 엔티티를 응답 DTO 타입으로 겸용하지 않습니다. **응답 DTO는 필드를 하나씩 직접 적어서 만듭니다.** `{ ...entity }`나 `Object.assign`처럼 엔티티를 펼쳐 넣으면 안 됩니다. TypeScript 타입은 실행할 때 필드를 지우지 않아서, 펼쳐 넣으면 비밀번호 해시 같은 내부 필드가 실제 JSON에 그대로 나갑니다. 중첩된 객체와 배열 안의 항목도 같은 규칙입니다.
 - 모듈끼리는 **Service(공개 메서드)로만** 부릅니다. 다른 모듈의 Repository나 테이블을 직접 건드리지 않습니다.
-- **트랜잭션**: 여러 Repository에 걸친 쓰기는 Service에서 묶습니다. Repository 메서드는 선택 인자로 트랜잭션 핸들을 받을 수 있게 합니다. 핸들 타입은 `infra/db`가 이름 붙인 타입(`Tx`)으로 내보내서, Service가 Prisma 타입을 import하지 않고 그대로 넘기기만 하게 합니다. 실행 도우미와 `Tx` 타입은 처음 필요해질 때 `infra/db`에 만듭니다(지금은 만들지 않음).
+- **트랜잭션은 `@Transactional()` 데코레이터로 합니다**(Spring과 같은 방식, 2026-11-13 결정). Service 메서드에 `@nestjs-cls/transactional`의 `@Transactional()`을 붙이면, 그 메서드 안에서 부른 모든 Repository가 같은 트랜잭션을 쓰고 예외가 나면 모두 롤백됩니다. Repository는 `PrismaService`를 직접 쓰지 않고 주입받은 `TransactionHost`의 `tx`로 쿼리합니다(진행 중인 트랜잭션이 있으면 그것, 없으면 기본 클라이언트). `TransactionHost`는 `@Inject(TransactionHost)`로 명시해서 주입합니다. `type` 별칭으로 받으면 NestJS가 주입 대상을 찾지 못합니다.
+  - 쓰기가 둘 이상인 Service 메서드에는 `@Transactional()`을 **반드시** 붙입니다. 빼먹으면 에러 없이 트랜잭션 없이 실행되고, 중간에 실패해도 먼저 쓴 행이 그대로 남습니다(시험에서 확인). 린트로 못 막으니 리뷰에서 확인합니다.
+  - 한 Repository 메서드 안의 중첩 쓰기(`create`에 관계된 행을 같이 넣는 것)는 Prisma가 이미 하나의 트랜잭션으로 처리하므로 데코레이터가 필요 없습니다.
+  - 안쪽 `@Transactional()`은 기본으로 바깥 트랜잭션에 합류하고, 안쪽이 실패하면 바깥까지 롤백됩니다. 바깥과 별개로 커밋해야 하는 드문 경우에만 `Propagation.RequiresNew`를 씁니다.
+  - 트랜잭션 안에서는 외부 API를 부르지 않습니다(연결과 잠금을 잡고 기다리게 됨). Prisma 대화형 트랜잭션의 기본 제한 시간은 5초입니다. "한 사람이 한 번" 같은 중복은 트랜잭션이 아니라 DB 유니크 제약으로 막습니다.
+  - **시험 결과**(2026-11-13, 임시 폴더, Nest 12.4·Prisma 7.10.1·`adapter-pg`): 로컬 Postgres에서 롤백, 커밋, 안쪽 실패 시 바깥 롤백, `this.`로 부른 메서드에도 적용, `RequiresNew`, 같은 연결 사용, 동시 요청 20개 분리가 모두 통과했습니다. 운영 Transaction pooler(6543)에서는 같은 연결 사용과 동시 20개 분리를 확인했고, 롤백은 테이블이 필요해서 로컬로 확인했습니다. 시험하지 않은 것: 실제 HTTP 요청 안에서의 동작, 쓰기 제한 시간과의 상호작용.
+  - 라이브러리(`nestjs-cls`, `@nestjs-cls/transactional`, `@nestjs-cls/transactional-adapter-prisma`) 설치와 `infra/db`의 설정은 **첫 기능 모듈이 필요로 할 때** 합니다. 지금은 설치돼 있지 않습니다.
 - **쓰기에 제한 시간을 걸 때**의 주의는 `PrismaService`의 주석에 있습니다(클라이언트 쪽 시간 초과가 쓰기 중복을 만들 수 있음).
 
 ## 4. 열린 결정 (PRD·ERD 뒤에 확정)
