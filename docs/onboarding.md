@@ -33,7 +33,7 @@ cd backend
 위의 세 줄을 실행하면 `scripts/setup.sh`가 아래를 차례로 합니다. 여러 번 실행해도 안전합니다.
 
 1. 필요한 도구가 있는지, Node가 22 이상인지, Docker가 켜져 있는지 확인합니다. 없으면 이유를 알려 주고 멈춥니다.
-2. `.env`가 없으면 `.env.example`을 복사해 만듭니다. 이미 있으면 그대로 둡니다.
+2. `.env`가 없으면 `.env.example`을 복사해 만듭니다. 이미 있으면 새로 만들지 않고, 로컬 DB·Redis 주소와 포트 줄만 스크립트가 맞춰 씁니다(다른 줄은 그대로). 이때 이 폴더 전용 compose 프로젝트 이름(`COMPOSE_PROJECT_NAME=swyp-backend-…`)도 한 번 적습니다. 저장소를 두 곳에 받아도 서로의 컨테이너·볼륨을 건드리지 않게 하기 위해서입니다.
 3. 포트가 비어 있는지 봅니다(포트는 `.env`에서만 바꿉니다. 셸에 `POSTGRES_PORT` 같은 값을 `export`해 두어도 스크립트는 지우고 실행합니다). 5433(Postgres)이나 6380(Redis)을 다른 프로그램이 쓰고 있으면 비어 있는 다른 포트를 골라 `.env`에 적습니다.
 4. `npm ci`로 의존성을 설치합니다.
 5. `docker compose up -d --wait`로 로컬 Postgres와 Redis를 띄우고 준비될 때까지 기다립니다.
@@ -54,7 +54,7 @@ curl localhost:3001/health        # {"status":"ok","db":"up","redis":"up"}가 �
 |---|---|
 | 서버 실행 | `npm run start:dev` |
 | 로컬 DB·Redis 켜기 / 끄기 | `docker compose up -d` / `docker compose down` |
-| 로컬 DB 데이터까지 지우고 처음부터 | `docker compose down -v` 후 `./scripts/setup.sh` (compose 프로젝트 이름이 `swyp-backend`로 고정돼 있어서 다른 프로젝트의 컨테이너·볼륨은 지우지 않습니다) |
+| 로컬 DB 데이터까지 지우고 처음부터 | `docker compose down -v` 후 `./scripts/setup.sh` (compose 프로젝트 이름이 이 폴더 전용이라 다른 폴더나 다른 프로젝트의 컨테이너·볼륨은 지우지 않습니다) |
 | 린트 / 타입 검사 / 빌드 | `npm run lint` / `npm run typecheck` / `npm run build` |
 | 단위 테스트 / e2e 테스트 | `npm test` / `npm run test:e2e` |
 | 모델 바꾼 뒤 마이그레이션 만들기 | `DIRECT_URL="postgresql://swyp:swyp@localhost:5433/swyp" npm run db:migrate -- --name <영문이름>` (포트는 `.env`의 값) |

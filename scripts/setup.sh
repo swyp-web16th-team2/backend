@@ -30,13 +30,13 @@ echo "node $(node -v), npm $(npm -v), $(docker compose version --short 2>/dev/nu
 
 say "2/6 .env 준비"
 if [ -f .env ]; then
-  echo ".env가 이미 있어서 그대로 씁니다."
+  echo ".env가 이미 있습니다. 새로 만들지 않고, 로컬 DB·Redis 주소와 포트 줄만 이 스크립트가 맞춰 씁니다."
 else
   cp .env.example .env
   echo ".env.example을 복사해 .env를 만들었습니다."
 fi
 
-env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '\r' | sed 's/[[:space:]]*$//' || true; }
+env_get() { grep -E "^$1=" .env | tail -1 | cut -d= -f2- | tr -d '\r' | sed -e 's/[[:space:]]*$//' -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'$/\1/" || true; }
 env_set() { # 키가 있으면 값을 바꾸고 없으면 맨 아래에 추가한다. macOS·Linux sed 차이를 피하려고 임시 파일을 쓴다.
   local tmp; tmp=$(mktemp)
   if grep -qE "^$1=" .env; then sed "s|^$1=.*|$1=$2|" .env > "$tmp"; else { cat .env; echo "$1=$2"; } > "$tmp"; fi
@@ -52,6 +52,13 @@ free_port_from() {
   done
   echo "$p"
 }
+
+# compose 프로젝트 이름이 같으면(폴더 이름이 같은 다른 체크아웃, 다른 프로젝트의 backend 폴더) 컨테이너와 볼륨을 서로 공유해서
+# 한쪽의 'docker compose down -v'가 다른 쪽 데이터를 지운다. 그래서 체크아웃 경로마다 다른 이름을 .env에 한 번만 적어 둔다.
+if [ -z "$(env_get COMPOSE_PROJECT_NAME)" ]; then
+  env_set COMPOSE_PROJECT_NAME "swyp-backend-$(node -p 'require("crypto").createHash("sha1").update(process.argv[1]).digest("hex").slice(0, 8)' "$PWD")"
+fi
+echo "compose 프로젝트 이름: $(env_get COMPOSE_PROJECT_NAME)"
 
 # 이 스크립트는 로컬용이다. .env의 DB 주소를 실제로 파싱해서 접속 호스트가 localhost·127.0.0.1이 아니거나
 # 쿼리로 호스트를 바꾸는 값(host, hostaddr)이 있으면 마이그레이션을 적용하지 않고 멈춘다.

@@ -1,9 +1,6 @@
 # 로컬 개발용 Postgres와 Redis. 배포 환경(Supabase, k3s의 Redis)과는 별개다.
 # 이미 쓰고 있는 로컬 DB·Redis와 포트가 겹치지 않도록 기본 포트를 5433, 6380으로 두었다.
 # 바꾸려면 POSTGRES_PORT, REDIS_PORT 환경 변수를 준다.
-# 프로젝트 이름을 고정한다. 정하지 않으면 폴더 이름(backend)이 쓰여서, 다른 경로의 backend 폴더나 다른 프로젝트의 컨테이너·볼륨과 섞일 수 있다.
-name: swyp-backend
-
 services:
   postgres:
     image: postgres:17-alpine
