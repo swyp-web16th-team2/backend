@@ -27,6 +27,10 @@ curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 - **모델을 바꾸는 절차, 마이그레이션 규칙, 위험한 변경, 운영 적용 방법은 [docs/migrations.md](docs/migrations.md)**에 있습니다. 마이그레이션 파일은 한 번 병합하면 고치지 않습니다(CI가 막습니다).
 - `prisma init`은 쓰지 마세요. 에이전트용 파일을 저장소에 만들어 버립니다.
 
+## 구조
+
+모듈 구성, 계층(Controller → Service → Repository), 폴더 구조, 열린 결정은 [docs/architecture.md](docs/architecture.md)에 있습니다(초안).
+
 ## CORS
 
 브라우저(React 등)에서 이 API를 부를 수 있는 주소는 환경 변수 `CORS_ORIGINS`(쉼표로 구분)로 정합니다. 없으면 로컬 개발 주소(`http://localhost:3000`, `http://localhost:5173`)만 허용합니다. 배포 환경의 값은 `infra` 레포 `apps/backend/deployment.yaml`에서 바꿉니다.
