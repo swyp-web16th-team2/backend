@@ -78,6 +78,11 @@ jobs:
           npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       - run: npm run build
       - run: npm test
+      # e2e가 쓰는 DB(swyp)에도 마이그레이션을 적용해야 테이블이 있다. 위의 비교용 DB(swyp_migration_check)와는 별개다.
+      - name: e2e용 DB에 마이그레이션 적용
+        env:
+          DIRECT_URL: postgresql://swyp:swyp@localhost:5432/swyp
+        run: npx prisma migrate deploy
       - run: npm run test:e2e
 
   image:
