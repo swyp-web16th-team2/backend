@@ -20,8 +20,9 @@ src/
       <기능>.module.ts
       <기능>.controller.ts     HTTP 입구
       <기능>.service.ts        업무 규칙
-      <기능>.repository.ts     DB 접근
-      dto/                     요청·응답 모양
+      <기능>.repository.ts     DB 접근. Prisma 결과를 엔티티로 바꿔 돌려줌
+      <기능>.entity.ts         이 모듈이 정한 타입(Prisma와 무관)
+      dto/                     요청 DTO와 응답 DTO
     health/                    (지금은 src/health에 있음)
   generated/prisma/            Prisma가 만든 클라이언트(git에 올리지 않음)
 ```
@@ -38,15 +39,18 @@ Controller → Service → Repository → PrismaService(infra/db)
 
 | 계층 | 하는 일 | 하지 않는 일 |
 |---|---|---|
-| Controller | 요청을 받고 DTO로 검증, Service 호출, 응답 | 업무 규칙, DB 접근 |
-| Service | 업무 규칙, 여러 Repository 조합, 트랜잭션 경계 | `PrismaService`나 Prisma 클라이언트를 직접 부르기 |
-| Repository | 한 모델(묶음)의 조회·저장·삭제. **Prisma를 부르는 유일한 곳** | 업무 규칙 |
+| Controller | 요청을 받고 요청 DTO로 검증, Service 호출, **엔티티를 응답 DTO로 바꿔** 응답 | 업무 규칙, DB 접근, 엔티티를 그대로 응답으로 내보내기 |
+| Service | 업무 규칙, 여러 Repository 조합, 트랜잭션 경계. 엔티티만 다룸 | `PrismaService`나 Prisma 타입·클라이언트를 직접 쓰기 |
+| Repository | 한 모델(묶음)의 조회·저장·삭제. **Prisma를 쓰는 유일한 곳**. Prisma 결과를 엔티티로 바꿔 반환 | 업무 규칙 |
 
 - **Service는 Prisma를 직접 부르지 않습니다.** 서비스가 DB 라이브러리에 묶이지 않고, 단위 테스트에서 Repository만 흉내 내면 됩니다.
 - Repository는 기능(모델 묶음)마다 하나씩 만들고, 모든 Repository가 상속하는 공통 베이스 클래스는 만들지 않습니다(처음에는 중복이 낫습니다).
-- Repository의 반환 타입은 **Prisma가 만든 모델 타입을 그대로** 씁니다. 도메인 객체로 따로 옮기는 변환 계층은 두지 않습니다(비용이 이득보다 큽니다). Controller는 Prisma 모델을 그대로 응답에 쓰지 않고 응답 DTO로 바꿔 내보냅니다. 비밀번호 해시나 내부 컬럼이 응답에 새는 것을 막기 위해서입니다.
+- **Prisma 타입은 Repository 밖으로 나가지 않습니다.** Repository는 Prisma가 돌려준 결과를 이 모듈이 정한 엔티티 타입(`<기능>.entity.ts`)으로 바꿔서 반환합니다. 변환 함수는 Repository 파일 안에 두고, 모델마다 몇 줄입니다. 엔티티는 평범한 TypeScript 타입이고, 업무 메서드가 있는 클래스로는 키우지 않습니다(필요해지는 모듈에서만 올립니다).
+- Prisma가 주는 `Date`, `Decimal`, enum 같은 타입은 Repository에서 엔티티가 정한 타입(문자열, 숫자, 문자열 유니온 등)으로 바꿉니다. 조회에 `include`를 쓰면 반환 타입이 Prisma 전용 타입이 되므로, 바꾼 결과에 `SpaceWithMembers` 같은 이름을 붙여 엔티티 파일에 둡니다.
+- `generated/prisma`를 import해도 되는 곳은 Repository와 `infra/db`뿐입니다. 이 규칙을 린트로 막는 것은 아직 걸지 않았습니다. oxlint로 가능한지 확인한 뒤 별도 작업으로 겁니다. 그 전에는 리뷰에서 확인합니다.
+- **API 응답은 엔티티와 별개인 응답 DTO**입니다. Controller가 엔티티를 응답 DTO로 바꿔 내보내므로, DB 컬럼 이름과 내부 컬럼(비밀번호 해시, 내부 관리용 값)이 응답에 새지 않고, DB 구조가 바뀌어도 API 모양은 그대로입니다. 엔티티를 응답 DTO 타입으로 겸용하지 않습니다. **응답 DTO는 필드를 하나씩 직접 적어서 만듭니다.** `{ ...entity }`나 `Object.assign`처럼 엔티티를 펼쳐 넣으면 안 됩니다. TypeScript 타입은 실행할 때 필드를 지우지 않아서, 펼쳐 넣으면 비밀번호 해시 같은 내부 필드가 실제 JSON에 그대로 나갑니다. 중첩된 객체와 배열 안의 항목도 같은 규칙입니다.
 - 모듈끼리는 **Service(공개 메서드)로만** 부릅니다. 다른 모듈의 Repository나 테이블을 직접 건드리지 않습니다.
-- **트랜잭션**: 여러 Repository에 걸친 쓰기는 Service에서 묶습니다. Repository 메서드는 선택 인자로 Prisma 트랜잭션 클라이언트를 받을 수 있게 하고, 처음 필요해질 때 `infra/db`에 실행 도우미를 만듭니다(지금은 만들지 않음).
+- **트랜잭션**: 여러 Repository에 걸친 쓰기는 Service에서 묶습니다. Repository 메서드는 선택 인자로 트랜잭션 핸들을 받을 수 있게 합니다. 핸들 타입은 `infra/db`가 이름 붙인 타입(`Tx`)으로 내보내서, Service가 Prisma 타입을 import하지 않고 그대로 넘기기만 하게 합니다. 실행 도우미와 `Tx` 타입은 처음 필요해질 때 `infra/db`에 만듭니다(지금은 만들지 않음).
 - **쓰기에 제한 시간을 걸 때**의 주의는 `PrismaService`의 주석에 있습니다(클라이언트 쪽 시간 초과가 쓰기 중복을 만들 수 있음).
 
 ## 4. 열린 결정 (PRD·ERD 뒤에 확정)
@@ -70,5 +74,6 @@ Controller → Service → Repository → PrismaService(infra/db)
 ## 6. 테스트 방침
 
 - **Service 단위 테스트**: Repository를 흉내 내서 업무 규칙만 확인합니다. DB 없이 빠르게 돕니다.
+- **응답 모양 테스트**: 기능마다 e2e에서 응답이 의도한 필드만 가지는지 확인합니다(정확히 일치하는지 비교). 중첩 객체와 배열 항목까지 포함하고, 필드를 하나 더 내보내거나 빠뜨리면 실패합니다. 테스트 데이터에는 내부 컬럼에 값을 넣어 두고, 그 값이 응답에 없는지 함께 확인합니다.
 - **Repository는 실제 DB로** e2e에서 확인합니다(로컬·CI의 Postgres). 흉내 낸 DB로는 쿼리 실수를 못 잡습니다.
 - 운영 DB에 쓰는 테스트는 만들지 않습니다. 쓰기 테스트는 로컬 주소일 때만 돌게 막습니다(SW2-69에서 정한 방식).
