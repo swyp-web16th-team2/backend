@@ -33,7 +33,12 @@ cd backend
 **3. 확인**
 
 ```bash
-npm run start:dev               # http://localhost:3001
+npm run start:dev               # 서버 실행. 이 터미널은 서버가 계속 쓰니 그대로 둡니다.
+```
+
+서버가 뜨면 **다른 터미널을 열어서** 확인합니다. 주소의 3001은 `.env`의 `PORT` 값입니다(바꿨다면 그 값).
+
+```bash
 curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 ```
 
@@ -55,7 +60,8 @@ curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 cp .env.example .env            # 로컬용 설정(.env는 git에 올라가지 않음)
 docker compose up -d            # 로컬 Postgres(5433), Redis(6380)
 npm install                     # Prisma 클라이언트도 같이 만들어 줌(postinstall)
-npm run start:dev               # http://localhost:3001
+npm run start:dev               # http://localhost:3001 (이 터미널은 서버가 계속 씁니다)
+# 다른 터미널에서:
 curl localhost:3001/health      # {"status":"ok","db":"up","redis":"up"}
 ```
 

@@ -42,7 +42,12 @@ cd backend
 끝나면 서버를 띄워 봅니다.
 
 ```bash
-npm run start:dev                 # 서버 실행(코드를 고치면 자동 재시작)
+npm run start:dev                 # 서버 실행(코드를 고치면 자동 재시작). 이 터미널은 서버가 계속 씁니다.
+```
+
+다른 터미널을 열어서 확인합니다. 주소의 3001은 `.env`의 `PORT` 값입니다.
+
+```bash
 curl localhost:3001/health        # {"status":"ok","db":"up","redis":"up"}가 나오면 정상
 ```
 
