@@ -29,7 +29,7 @@ cd backend
 - Node는 nvm으로 맞추는 것을 권합니다: `nvm install 22 && nvm use 22`.
 - Docker Desktop은 **켜 둔 상태**여야 합니다.
 - **pnpm 명령을 직접 쓰려면**(서버 실행, 패키지 추가 등) 터미널에서 `pnpm`이 실행돼야 합니다. 이미 pnpm이 깔려 있으면(10 이상) 레포 안에서 자동으로 10.34.9로 바뀌어 실행됩니다. 없으면 `corepack enable`을 한 번 실행하세요(Node에 들어 있는 기능이고, 권한 오류가 나면 앞에 `sudo`). 스크립트는 이 설정을 대신 바꾸지 않습니다.
-- 이 레포는 pnpm을 10.34.9로 고정했습니다. pnpm 12는 구조가 달라서, 이미 깔려 있는 pnpm 10.9.0이 12.18.0으로 자동 전환하지 못하고 `ENOEXEC`로 실패하는 것을 확인했기 때문입니다(10.34.9로는 전환됩니다). 버전을 올릴 때는 이 점을 다시 확인합니다.
+- 이 레포는 pnpm을 10.34.9로 고정했습니다. 이 PC에서는 이미 깔려 있던 pnpm 10.9.0이 12.18.0으로 자동 전환하지 못하고 실패했고(`ENOEXEC`), 10.34.9로는 전환됐기 때문입니다. 다른 환경에서는 오류 문구가 다를 수 있습니다. 버전을 올릴 때는 이 점을 다시 확인합니다.
 
 ## 2. 설정
 
@@ -45,7 +45,7 @@ cd backend
 끝나면 서버를 띄워 봅니다.
 
 ```bash
-ppnpm run start:dev                # 서버 실행(코드를 고치면 자동 재시작). 이 터미널은 서버가 계속 씁니다.
+pnpm run start:dev                # 서버 실행(코드를 고치면 자동 재시작). 이 터미널은 서버가 계속 씁니다.
 ```
 
 다른 터미널을 열어서 확인합니다. 주소의 3001은 `.env`의 `PORT` 값입니다.
@@ -66,7 +66,7 @@ curl localhost:3001/health        # {"status":"ok","db":"up","redis":"up"}가 �
 | 로컬 DB 데이터까지 지우고 처음부터 | `docker compose down -v` 후 `./scripts/setup.sh` (compose 프로젝트 이름이 이 폴더 전용이라 다른 폴더나 다른 프로젝트의 컨테이너·볼륨은 지우지 않습니다) |
 | 린트 / 타입 검사 / 빌드 | `pnpm run lint` / `pnpm run typecheck` / `pnpm run build` |
 | 단위 테스트 / e2e 테스트 | `pnpm test` / `pnpm run test:e2e` |
-| 모델 바꾼 뒤 마이그레이션 만들기 | `DIRECT_URL="postgresql://swyp:swyp@localhost:5433/swyp" pnpm run db:migrate -- --name <영문이름>` (포트는 `.env`의 값) |
+| 모델 바꾼 뒤 마이그레이션 만들기(`--` 없이 씁니다) | `DIRECT_URL="postgresql://swyp:swyp@localhost:5433/swyp" pnpm run db:migrate --name <영문이름>` (포트는 `.env`의 값) |
 
 DB 구조를 바꿀 때는 [마이그레이션 가이드](migrations.md)를 꼭 읽으세요. 위 명령처럼 로컬 주소를 명령에 직접 붙이는 이유도 거기에 있습니다.
 

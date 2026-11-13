@@ -18,12 +18,13 @@ DB 구조(테이블·컬럼)를 바꾸는 일은 코드와 달리 **한 번 적�
 docker compose up -d                       # 로컬 Postgres (README의 로컬 실행 참고, .env 필요)
 LOCAL_URL=postgresql://swyp:swyp@localhost:5433/swyp   # compose의 로컬 DB (POSTGRES_PORT를 바꿨다면 포트도 맞춥니다)
 # 1) prisma/schema.prisma 수정
-DIRECT_URL="$LOCAL_URL" pnpm run db:migrate -- --name add_place     # 2) 마이그레이션 만들고 로컬 DB에 적용
+DIRECT_URL="$LOCAL_URL" pnpm run db:migrate --name add_place     # 2) 마이그레이션 만들고 로컬 DB에 적용
 # 3) prisma/migrations/<시각>_add_place/migration.sql 을 열어서 확인
 pnpm run db:generate                        # 4) Prisma 클라이언트 다시 만들기
 pnpm test && pnpm run test:e2e               # 5) 테스트
 ```
 
+- **pnpm에서는 옵션 앞에 `--`를 붙이지 않습니다.** npm은 `npm run db:migrate -- --name x`처럼 `--`가 필요했지만, pnpm은 `--`까지 그대로 Prisma에 넘깁니다. 붙이면 `--name`과 `--create-only`가 무시되어 이름을 다시 묻거나, **SQL을 검토하기 전에 마이그레이션이 DB에 적용될 수 있습니다**(코드 리뷰에서 재현됨, 확인함: `--`를 빼면 `--create-only`가 폴더만 만들고 적용하지 않습니다). 올바른 형태는 `pnpm run db:migrate --name x --create-only`입니다.
 - 로컬 DB를 건드리는 명령(`db:migrate`, `db:deploy`, `migrate diff`)에는 위 ⚠️ 때문에 `DIRECT_URL="$LOCAL_URL"`을 붙여 쓰는 것을 권합니다. `LOCAL_URL`은 새 셸마다 다시 정의해야 합니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요.
 - **`db:generate`를 꼭 합니다.** Prisma 7에서는 `migrate dev`가 클라이언트를 자동으로 다시 만들지 않습니다(확인함: 마이그레이션 직후 `src/generated/prisma/models/`가 비어 있었고 `db:generate` 뒤에 `Place.ts`가 생김). 안 하면 새 모델이 코드에서 안 보입니다.
 - 이름(`--name`)은 **영어 소문자와 밑줄**로 "무엇을 했는지"를 적습니다: `add_place`, `add_space_member`, `drop_place_area`. 폴더는 `20261112021812_add_place`처럼 `시각_이름`이 되고, **적용 순서는 이름순**입니다.
@@ -37,7 +38,7 @@ pnpm test && pnpm run test:e2e               # 5) 테스트
   DIRECT_URL="$LOCAL_URL" pnpm run db:deploy                       # 마이그레이션만으로 DB를 만들고
   DIRECT_URL="$LOCAL_URL" pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
   ```
-  두 명령에 같은 로컬 주소를 직접 넘기는 이유는 위 ⚠️ 때문입니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요. 종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `DIRECT_URL="$LOCAL_URL" pnpm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
+  두 명령에 같은 로컬 주소를 직접 넘기는 이유는 위 ⚠️ 때문입니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요. 종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `DIRECT_URL="$LOCAL_URL" pnpm run db:migrate --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
   - **깨끗하지 않은 DB에서 이 비교를 하면 빠뜨림을 놓칠 수 있습니다**(확인함: 로컬 DB에 손으로 컬럼을 추가하고 `schema.prisma`에도 추가했는데 마이그레이션은 없을 때, 현재 DB와 비교하면 종료 코드 0이 나오고 깨끗한 DB와 비교하면 2가 나옴. 코드 리뷰에서도 같은 결과). 위 로컬 확인은 반드시 `down -v` 뒤에 하세요.
 - 주의: `migrate dev --create-only`는 **바뀐 게 없어도 빈 마이그레이션 폴더를 만듭니다**(확인함). "바뀐 게 있는지" 확인하는 용도로 쓰지 마세요. 또 `migrate dev`는 만든 마이그레이션을 **바로 적용**하므로, 적용된 뒤에는 폴더 이름을 바꾸지 못합니다(3절). 이름은 처음부터 알맞게 정합니다.
 
@@ -55,7 +56,7 @@ Prisma가 만드는 SQL이 **의도와 다를 수 있습니다.**
 **이름 바꾸기 예시** (확인한 흐름):
 
 ```bash
-DIRECT_URL="$LOCAL_URL" pnpm run db:migrate -- --name rename_place_area --create-only   # 새로 만드는 마이그레이션만 적용하지 않음(확인함)
+DIRECT_URL="$LOCAL_URL" pnpm run db:migrate --name rename_place_area --create-only   # 새로 만드는 마이그레이션만 적용하지 않음(확인함)
 # 주의: --create-only도 이미 대기 중이던 다른 마이그레이션은 먼저 적용합니다(코드 리뷰에서 재현됨). 그래서 로컬 주소를 꼭 붙입니다.
 # migration.sql 의 DROP/ADD 를 아래처럼 직접 고친다
 #   ALTER TABLE "Place" RENAME COLUMN "area" TO "district";
