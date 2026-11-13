@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 로컬 개발환경을 한 번에 설정한다. 여러 번 실행해도 안전하다.
-# 하는 일: 도구 확인 → .env 만들기 → 포트 충돌 피하기 → 의존성 설치 → 로컬 Postgres·Redis 실행 → 마이그레이션 적용 → 테스트로 확인
+# 하는 일: 도구 확인 → .env 만들기 → 포트 충돌 피하기 → 의존성 설치(pnpm) → 로컬 Postgres·Redis 실행 → 마이그레이션 적용 → 테스트로 확인
 # 운영(Supabase) 주소는 쓰지 않는다. 자세한 설명은 docs/onboarding.md.
 
 # `sh scripts/setup.sh`로 실행해도 되도록 bash로 다시 실행한다(pipefail 등이 필요).
@@ -19,7 +19,7 @@ unset DATABASE_URL DIRECT_URL REDIS_URL PGHOST PGPORT PGUSER PGPASSWORD PGDATABA
 unset POSTGRES_PORT REDIS_PORT COMPOSE_PROJECT_NAME COMPOSE_FILE COMPOSE_PROFILES COMPOSE_ENV_FILES
 
 say "1/6 필요한 도구 확인"
-for c in git node npm docker; do
+for c in git node corepack docker; do
   command -v "$c" >/dev/null 2>&1 || die "$c 가 설치되어 있지 않습니다. docs/onboarding.md의 '준비물'을 먼저 확인하세요."
 done
 # Node 범위는 package-lock.json의 engines 기준이다. Prisma는 ^22.12 || >=24(23은 제외)를 요구해서 못 맞으면 멈추고,
@@ -36,7 +36,12 @@ set +e; node_level "$node_ver"; level=$?; set -e
 [ "$level" -ne 1 ] || echo "[주의] Node $node_ver 는 개발 도구(Nest CLI 등)의 지원 범위(22.22.3 이상의 22.x, 24.15 이상의 24.x, 26 이상) 밖입니다. 지금은 계속 진행하지만, 이상한 오류가 나면 'nvm install 22'로 최신 22.x로 올리세요."
 docker compose version >/dev/null 2>&1 || die "'docker compose' 명령이 없습니다. Docker Desktop을 최신으로 설치하거나 compose v2 플러그인을 설치하세요."
 docker info >/dev/null 2>&1 || die "Docker가 실행 중이 아닙니다. Docker Desktop을 켠 뒤 다시 실행하세요."
-echo "node $(node -v), npm $(npm -v), $(docker compose version --short 2>/dev/null || echo compose)"
+# pnpm은 corepack(Node에 들어 있음)이 package.json의 packageManager에 적힌 버전으로 실행한다. 컴퓨터에 다른 버전의 pnpm이 깔려 있어도
+# 이 스크립트는 항상 고정된 버전을 쓰도록 'corepack pnpm'으로 부른다. 처음에는 pnpm을 내려받는다. 컴퓨터의 전역 설정은 바꾸지 않는다('corepack enable'을 하지 않는다).
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+pnpm_run() { corepack pnpm "$@"; }
+pnpm_ver=$(pnpm_run --version 2>/dev/null) || die "corepack으로 pnpm을 실행하지 못했습니다. 인터넷 연결을 확인하거나 'corepack enable' 후 다시 실행하세요."
+echo "node $(node -v), pnpm $pnpm_ver, $(docker compose version --short 2>/dev/null || echo compose)"
 
 say "2/6 .env 준비"
 if [ -f .env ]; then
@@ -108,8 +113,8 @@ env_set DIRECT_URL "postgresql://swyp:swyp@localhost:$pg_port/swyp"
 env_set REDIS_URL "redis://localhost:$redis_port"
 echo "Postgres $pg_port, Redis $redis_port"
 
-say "4/6 의존성 설치(npm ci)"
-npm ci
+say "4/6 의존성 설치(pnpm install --frozen-lockfile)"
+pnpm_run install --frozen-lockfile
 
 say "5/6 로컬 Postgres·Redis 실행"
 docker compose up -d --wait
@@ -117,15 +122,15 @@ local_db_url=$(env_get DIRECT_URL)
 
 say "6/6 마이그레이션 적용과 확인"
 # 운영이 아닌 로컬 DB에만 적용하도록 주소를 명령에 직접 넘긴다.
-DIRECT_URL="$local_db_url" npm run db:deploy
-npm test
-npm run test:e2e
+DIRECT_URL="$local_db_url" pnpm_run run db:deploy
+pnpm_run test
+pnpm_run run test:e2e
 
 cat <<EOF
 
 완료했습니다. 로컬 환경이 준비됐습니다.
 
-  서버 실행:   npm run start:dev      (주소 http://localhost:$(env_get PORT))
+  서버 실행:   pnpm run start:dev     (주소 http://localhost:$(env_get PORT))
   확인:        curl localhost:$(env_get PORT)/health
   끄기:        docker compose down      (데이터까지 지우기: docker compose down -v)
 

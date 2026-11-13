@@ -10,7 +10,7 @@ DB 구조(테이블·컬럼)를 바꾸는 일은 코드와 달리 **한 번 적�
 4. 운영(Supabase)에는 PR이 `main`에 병합될 때 **CI가 `prisma migrate deploy`로 적용**합니다(승인자가 승인한 뒤, 6절). 사람이 운영 DB에 직접 명령을 칠 일은 장애 복구 때뿐입니다. `db:migrate`는 **로컬 DB 전용**입니다.
 5. 마이그레이션을 **빠뜨리거나**, 이미 있는 마이그레이션을 **고치거나 지우거나 이름을 바꾸면** PR에서 CI가 막습니다(1절·3절).
 
-> ⚠️ **셸에 `DIRECT_URL`이 export돼 있으면 `.env`의 로컬 주소보다 우선합니다**(코드 리뷰에서 재현됨). 운영 주소를 export한 셸에서 `npm run db:deploy` 같은 명령을 실행하면 **로컬이 아니라 운영 DB**에 적용됩니다. 그래서 운영 주소는 `export`하지 않고 명령마다 넘기며(6절), 로컬 DB를 지우거나 되돌리는 명령에는 로컬 주소를 직접 적습니다.
+> ⚠️ **셸에 `DIRECT_URL`이 export돼 있으면 `.env`의 로컬 주소보다 우선합니다**(코드 리뷰에서 재현됨). 운영 주소를 export한 셸에서 `pnpm run db:deploy` 같은 명령을 실행하면 **로컬이 아니라 운영 DB**에 적용됩니다. 그래서 운영 주소는 `export`하지 않고 명령마다 넘기며(6절), 로컬 DB를 지우거나 되돌리는 명령에는 로컬 주소를 직접 적습니다.
 
 ## 1. 모델을 바꾸는 절차 (로컬)
 
@@ -18,10 +18,10 @@ DB 구조(테이블·컬럼)를 바꾸는 일은 코드와 달리 **한 번 적�
 docker compose up -d                       # 로컬 Postgres (README의 로컬 실행 참고, .env 필요)
 LOCAL_URL=postgresql://swyp:swyp@localhost:5433/swyp   # compose의 로컬 DB (POSTGRES_PORT를 바꿨다면 포트도 맞춥니다)
 # 1) prisma/schema.prisma 수정
-DIRECT_URL="$LOCAL_URL" npm run db:migrate -- --name add_place     # 2) 마이그레이션 만들고 로컬 DB에 적용
+DIRECT_URL="$LOCAL_URL" pnpm run db:migrate -- --name add_place     # 2) 마이그레이션 만들고 로컬 DB에 적용
 # 3) prisma/migrations/<시각>_add_place/migration.sql 을 열어서 확인
-npm run db:generate                        # 4) Prisma 클라이언트 다시 만들기
-npm test && npm run test:e2e               # 5) 테스트
+pnpm run db:generate                        # 4) Prisma 클라이언트 다시 만들기
+pnpm test && pnpm run test:e2e               # 5) 테스트
 ```
 
 - 로컬 DB를 건드리는 명령(`db:migrate`, `db:deploy`, `migrate diff`)에는 위 ⚠️ 때문에 `DIRECT_URL="$LOCAL_URL"`을 붙여 쓰는 것을 권합니다. `LOCAL_URL`은 새 셸마다 다시 정의해야 합니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요.
@@ -34,10 +34,10 @@ npm test && npm run test:e2e               # 5) 테스트
   ```bash
   docker compose down -v && docker compose up -d   # 깨끗한 로컬 DB
   LOCAL_URL=postgresql://swyp:swyp@localhost:5433/swyp            # compose의 로컬 DB (POSTGRES_PORT를 바꿨다면 포트도 맞춥니다)
-  DIRECT_URL="$LOCAL_URL" npm run db:deploy                       # 마이그레이션만으로 DB를 만들고
-  DIRECT_URL="$LOCAL_URL" npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+  DIRECT_URL="$LOCAL_URL" pnpm run db:deploy                       # 마이그레이션만으로 DB를 만들고
+  DIRECT_URL="$LOCAL_URL" pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
   ```
-  두 명령에 같은 로컬 주소를 직접 넘기는 이유는 위 ⚠️ 때문입니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요. 종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `DIRECT_URL="$LOCAL_URL" npm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
+  두 명령에 같은 로컬 주소를 직접 넘기는 이유는 위 ⚠️ 때문입니다. 출력의 호스트가 `localhost`인지 눈으로 확인하세요. 종료 코드 **0**(`No difference detected.`)이면 같고, **2**이면 마이그레이션에 없는 변경이 있는 것입니다(`Added column ...`처럼 무엇이 빠졌는지 나옵니다. `--script`를 붙이면 필요한 SQL이 나옵니다). 그때는 1절의 `DIRECT_URL="$LOCAL_URL" pnpm run db:migrate -- --name <의미 있는 이름>`으로 마이그레이션을 만듭니다.
   - **깨끗하지 않은 DB에서 이 비교를 하면 빠뜨림을 놓칠 수 있습니다**(확인함: 로컬 DB에 손으로 컬럼을 추가하고 `schema.prisma`에도 추가했는데 마이그레이션은 없을 때, 현재 DB와 비교하면 종료 코드 0이 나오고 깨끗한 DB와 비교하면 2가 나옴. 코드 리뷰에서도 같은 결과). 위 로컬 확인은 반드시 `down -v` 뒤에 하세요.
 - 주의: `migrate dev --create-only`는 **바뀐 게 없어도 빈 마이그레이션 폴더를 만듭니다**(확인함). "바뀐 게 있는지" 확인하는 용도로 쓰지 마세요. 또 `migrate dev`는 만든 마이그레이션을 **바로 적용**하므로, 적용된 뒤에는 폴더 이름을 바꾸지 못합니다(3절). 이름은 처음부터 알맞게 정합니다.
 
@@ -55,11 +55,11 @@ Prisma가 만드는 SQL이 **의도와 다를 수 있습니다.**
 **이름 바꾸기 예시** (확인한 흐름):
 
 ```bash
-DIRECT_URL="$LOCAL_URL" npm run db:migrate -- --name rename_place_area --create-only   # 새로 만드는 마이그레이션만 적용하지 않음(확인함)
+DIRECT_URL="$LOCAL_URL" pnpm run db:migrate -- --name rename_place_area --create-only   # 새로 만드는 마이그레이션만 적용하지 않음(확인함)
 # 주의: --create-only도 이미 대기 중이던 다른 마이그레이션은 먼저 적용합니다(코드 리뷰에서 재현됨). 그래서 로컬 주소를 꼭 붙입니다.
 # migration.sql 의 DROP/ADD 를 아래처럼 직접 고친다
 #   ALTER TABLE "Place" RENAME COLUMN "area" TO "district";
-DIRECT_URL="$LOCAL_URL" npm run db:deploy                       # 고친 SQL을 로컬 DB에 적용(확인함: --create-only로 만든 것도 이 명령으로 적용됨. LOCAL_URL은 1절)
+DIRECT_URL="$LOCAL_URL" pnpm run db:deploy                       # 고친 SQL을 로컬 DB에 적용(확인함: --create-only로 만든 것도 이 명령으로 적용됨. LOCAL_URL은 1절)
 ```
 
 - 직접 쓰는 터미널에서는 Prisma가 데이터 손실 변경에 확인을 물어볼 수 있습니다(이 환경에서는 확인하지 못함). 하지만 **CI·스크립트처럼 입력이 없는 환경에서는 확인 없이 적용됐습니다**(확인함: 컬럼 삭제 마이그레이션이 바로 적용됨). 그러니 SQL을 읽는 것은 사람이 합니다.
@@ -92,14 +92,14 @@ DIRECT_URL="$LOCAL_URL" npm run db:deploy                       # 고친 SQL을 
 
 ```bash
 # 스키마 파일과 실제 로컬 DB가 다른지 (종료 코드 0=같음, 2=다름. 둘 다 확인함)
-DIRECT_URL="$LOCAL_URL" npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+DIRECT_URL="$LOCAL_URL" pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 # 마이그레이션 적용 상태
-DIRECT_URL="$LOCAL_URL" npx prisma migrate status
+DIRECT_URL="$LOCAL_URL" pnpm exec prisma migrate status
 ```
 
-- **`migrate status`는 DB를 손으로 바꾼 것(drift)을 알려주지 않습니다**(확인함: "Database schema is up to date!"). 구조가 의심되면 위의 `migrate diff`를 쓰고, 로컬에서는 `DIRECT_URL="$LOCAL_URL" npm run db:migrate`가 drift를 알려 줍니다.
-- 로컬 DB를 처음부터 다시 만들기: `docker compose down -v` → `docker compose up -d` → `DIRECT_URL="$LOCAL_URL" npm run db:deploy`(`LOCAL_URL`은 1절의 로컬 주소. 확인함: 빈 DB에서 마이그레이션이 전부 순서대로 적용됨). 로컬 데이터가 **모두 사라집니다.** (`migrate reset`이라는 공식 명령도 있지만 이 가이드에서는 시험하지 않았고, 위 Compose 방법으로 충분합니다. 쓰려면 반드시 `DIRECT_URL="$LOCAL_URL" npx prisma migrate reset`처럼 로컬 주소를 붙여 직접 터미널에서 실행합니다.)
-- **`npx prisma`는 레포에 설치된 버전(7.10.1)을 써야 합니다.** `npm install`을 하지 않은 폴더에서 실행하면 npm의 **최신 버전**을 받아 실행하는데, 그 버전(8.0 rc)에서는 `migrate diff`가 다른 명령으로 옮겨졌다는 안내가 나왔습니다(확인함). Prisma를 올릴 때는 이 문서의 명령을 모두 다시 확인합니다.
+- **`migrate status`는 DB를 손으로 바꾼 것(drift)을 알려주지 않습니다**(확인함: "Database schema is up to date!"). 구조가 의심되면 위의 `migrate diff`를 쓰고, 로컬에서는 `DIRECT_URL="$LOCAL_URL" pnpm run db:migrate`가 drift를 알려 줍니다.
+- 로컬 DB를 처음부터 다시 만들기: `docker compose down -v` → `docker compose up -d` → `DIRECT_URL="$LOCAL_URL" pnpm run db:deploy`(`LOCAL_URL`은 1절의 로컬 주소. 확인함: 빈 DB에서 마이그레이션이 전부 순서대로 적용됨). 로컬 데이터가 **모두 사라집니다.** (`migrate reset`이라는 공식 명령도 있지만 이 가이드에서는 시험하지 않았고, 위 Compose 방법으로 충분합니다. 쓰려면 반드시 `DIRECT_URL="$LOCAL_URL" pnpm exec prisma migrate reset`처럼 로컬 주소를 붙여 직접 터미널에서 실행합니다.)
+- **`pnpm exec prisma`는 레포에 설치된 버전(7.10.1)만 씁니다.** `pnpm install`을 하지 않은 폴더에서는 `Command "prisma" not found`로 멈춥니다(확인함). 설치 없이 내려받아 쓰는 `npx prisma`나 `pnpm dlx prisma`는 최신 버전을 받아서 이 문서의 명령과 맞지 않을 수 있습니다(`npx`로 확인함: 그 버전(8.0 rc)에서는 `migrate diff`가 다른 명령으로 옮겨졌다는 안내가 나왔습니다). Prisma를 올릴 때는 이 문서의 명령을 모두 다시 확인합니다.
 - AI 에이전트(Claude Code 등)로 개발할 때: Prisma 7은 에이전트가 `migrate reset` 같은 위험 명령을 실행하면 **사용자 동의 없이는 거부**합니다(확인함). 동의를 대신 넣어서 우회하지 말고 사람이 직접 판단해서 실행합니다.
 
 ## 6. 운영(Supabase)에 적용 — 병합하면 CI가 승인 후 자동 적용합니다
@@ -110,7 +110,7 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 1. PR을 `main`에 병합하면 `check`·`image`·`publish`가 돕니다.
 2. `migrate-plan`이 **지금 배포된 커밋**(infra 레포 `deployment.yaml`에 적힌 이미지 태그)과 이번 커밋을 비교해 `prisma/migrations`가 달라졌는지 봅니다. DB 접속 정보는 쓰지 않습니다.
 3. 달라졌으면 `migrate`가 **승인 대기**에 들어갑니다. 달라지지 않았으면 건너뛰고 바로 `deploy`로 갑니다(승인 없이 지금처럼 배포됨).
-4. 승인자가 Actions 실행 화면의 **Review deployments**에서 `production`을 승인하면 `npx prisma migrate deploy`가 운영 DB에 적용됩니다.
+4. 승인자가 Actions 실행 화면의 **Review deployments**에서 `production`을 승인하면 `pnpm exec prisma migrate deploy`가 운영 DB에 적용됩니다.
 5. `migrate`가 **성공해야 `deploy`가 돕니다.** 실패하거나 승인하지 않으면(거절·대기) 새 버전은 배포되지 않고, 지금 돌고 있는 버전이 그대로 유지됩니다.
 
 **승인자가 볼 것**: 승인하면 **아직 적용 안 된 마이그레이션이 모두** 적용됩니다(이번 병합의 것뿐 아니라 앞선 병합에서 대기·거절·실패로 남은 것도). 그 SQL 전체가 이 실행의 `migrate-plan` 작업 **요약(Summary) 화면**에 나옵니다(자르지 않고 전체를 보여 줍니다. 요약이 약 900KB를 넘으면 다 담을 수 없어 `migrate-plan`이 실패하고 배포가 멈추니, 그때는 사람이 처리합니다). 그 화면의 SQL을 읽고 승인합니다. 컬럼·테이블 삭제(`DROP`), 이름 변경(`DROP`+`ADD`로 나옴), 타입 변경, 큰 테이블 잠금이 있으면 승인하지 않고 팀과 먼저 상의합니다(2절). 승인자는 지금 `labyrinth30` 한 명이고, 레포 Settings > Environments > production에서 바꿉니다.
@@ -125,7 +125,7 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 - 이번 병합 사이에 아직 배포 안 된 앞선 마이그레이션이 있으면 그것도 함께 적용 대상이 됩니다(비교 기준이 "지금 배포된 커밋"이라서). 앞선 병합의 `migrate`가 대기 중이면 뒤따르는 병합도 같이 승인 대기에 들어갑니다.
 - 배포된 커밋을 읽지 못하는 등 판단이 안 서면 적용 쪽(승인 대기)으로 기웁니다. 승인했는데 적용할 게 없으면 "No pending migrations"로 끝납니다.
 - 운영에는 별도 스테이징이 없어서 승인 즉시 운영 DB가 바뀝니다. 첫 마이그레이션은 작게(테이블 추가 정도로) 시작합니다.
-- **확인 범위**: 판단 로직(`migrate-plan`)은 여러 git 상황으로 로컬에서 시험했고, `npm ci --ignore-scripts` 뒤 `prisma migrate deploy`가 임시 Postgres에서 적용되는 것도 확인했습니다. 실제 GitHub Actions의 승인 대기, 요약 화면에 SQL이 나오는 것, 실제 Supabase 세션 풀러 접속은 첫 마이그레이션 PR에서 처음 실행됩니다.
+- **확인 범위**: 판단 로직(`migrate-plan`)은 여러 git 상황으로 로컬에서 시험했고, `pnpm install --frozen-lockfile --ignore-scripts` 뒤 `pnpm exec prisma migrate deploy`가 임시 Postgres에서 적용되는 것도 확인했습니다. 실제 GitHub Actions의 승인 대기, 요약 화면에 SQL이 나오는 것, 실제 Supabase 세션 풀러 접속은 첫 마이그레이션 PR에서 처음 실행됩니다.
 
 **사람이 운영 DB에 직접 명령을 쳐야 할 때**(장애 복구, `P3009` 해소 등)의 확인 사항입니다. 모두 로컬 DB로 확인했고, 실제 Supabase에서는 아직 확인하지 못했습니다.
 1. **작업 트리가 깨끗하고 최신 `main`인지**: `git status --porcelain`이 비어 있고(추적·미추적 파일 모두) `git fetch origin main && git rev-parse HEAD origin/main`이 같아야 합니다. `status`와 `deploy`는 커밋이 아니라 **현재 작업 트리의 파일**을 읽기 때문에, 오래된 작업 트리에서는 최신 마이그레이션이 빠진 채 "성공"하고, 수정되었거나 추적 안 되는 SQL이 그대로 운영에 적용될 수 있습니다.
@@ -143,5 +143,5 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 | `The migration ... was modified after it was applied` | 적용된 마이그레이션 파일을 고쳤습니다. `git checkout`으로 원래대로 되돌리고 새 마이그레이션을 추가합니다 |
 | `Error: P3009` / `Following migration have failed` | 이전에 적용하다 **중간에 실패한 마이그레이션이 DB에 "실패" 기록으로 남아 있어** 이후 `deploy`가 막힌 상태입니다(확인함). **실패한 마이그레이션 이름은 `deploy`가 `P3009`와 함께 출력한 이름**에서 봅니다(`status`는 뒤따르는 대기분이 있으면 실패 이름을 안 보여 줄 수 있음). 먼저 **DB가 부분적으로 적용된 상태인지, 데이터가 어떤지 확인**하세요. `migrate resolve --rolled-back`(원래대로 돌렸을 때)·`--applied`(손으로 끝까지 적용했을 때)는 SQL을 되돌리지 않고 **기록만 바꾸며, 실행하고 나면 취소하기 어렵습니다**(확인함: 로컬에서 `--rolled-back`으로 풀림, 코드 리뷰에서 재현됨: 일부 SQL이 적용된 채로도 기록은 바로 바뀜). **운영에서는 혼자 하지 말고 팀과 먼저 상의**하고, 명령마다 대상 주소를 직접 넘겨서(6절 2번) 로컬 DB의 기록을 바꾸지 않게 합니다 |
 | `Drift detected` | 누군가 DB를 직접 바꿨습니다. **로컬**은 초기화(5절)로 됩니다. **운영**은 혼자 고치지 말고 팀과 먼저 상의합니다. 실제 DB 구조·데이터와 마이그레이션 이력을 비교(`migrate diff`)해서 차이를 파악한 뒤, 어떤 SQL과 어떤 이력 정리가 필요한지 사람이 정합니다. **새 마이그레이션이 항상 안전한 해결책은 아닙니다**(코드 리뷰에서 재현됨: 운영에 이미 있는 컬럼을 이력에 반영하려고 깨끗한 DB 기준으로 만든 새 마이그레이션은 `ADD COLUMN`이라서, 운영에 적용하면 이미 있는 컬럼 때문에 `deploy`가 실패하고 실패 기록이 남습니다) |
-| 새 모델이 코드에서 안 보임 / 타입 오류 | `npm run db:generate`를 안 했습니다 |
+| 새 모델이 코드에서 안 보임 / 타입 오류 | `pnpm run db:generate`를 안 했습니다 |
 | `Error: Prisma Migrate detected that it was invoked by Claude Code` | Prisma의 에이전트 안전장치입니다. 사람이 직접 실행하거나 동의합니다 |

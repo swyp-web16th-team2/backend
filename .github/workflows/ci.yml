@@ -47,9 +47,11 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint
+      # pnpm은 corepack(Node에 들어 있음)으로 켠다. 버전은 package.json의 packageManager가 정한다.
+      - name: pnpm 켜기
+        run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
       # oxlint의 no-restricted-imports는 `import('...')` 같은 타입 쿼리를 못 본다. 그래서 문법을 따지지 않고,
       # Prisma를 가리키는 문자열이 허용된 파일 밖에 나오면 실패시킨다(공백, require, 타입 쿼리, 주석 모두 해당).
       # 허용 범위는 .oxlintrc.json의 overrides와 같게 둔다(Repository, db 폴더, 테스트, 생성된 클라이언트).
@@ -61,7 +63,7 @@ jobs:
             echo "위 줄은 Repository 밖에서 Prisma를 가리킵니다. 주석에도 쓰지 않습니다(docs/architecture.md 3절)."
             exit 1
           fi
-      - run: npm run typecheck
+      - run: pnpm run typecheck
       # 이미 병합된 마이그레이션을 고치거나 지우면 운영 DB에 적용하는 migrate deploy가 아무 경고 없이 넘어간다.
       # 그래서 PR에서 막는다. 새 마이그레이션을 추가하는 것만 허용한다(docs/migrations.md).
       - name: 이미 있는 마이그레이션을 고치거나 지우지 않았는지 확인
@@ -84,16 +86,16 @@ jobs:
           DIRECT_URL: postgresql://swyp:swyp@localhost:5432/swyp_migration_check
         run: |
           PGPASSWORD=swyp psql -h localhost -U swyp -d swyp -v ON_ERROR_STOP=1 -c 'CREATE DATABASE swyp_migration_check'
-          npx prisma migrate deploy
-          npx prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
-      - run: npm run build
-      - run: npm test
+          pnpm exec prisma migrate deploy
+          pnpm exec prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
+      - run: pnpm run build
+      - run: pnpm test
       # e2e가 쓰는 DB(swyp)에도 마이그레이션을 적용해야 테이블이 있다. 위의 비교용 DB(swyp_migration_check)와는 별개다.
       - name: e2e용 DB에 마이그레이션 적용
         env:
           DIRECT_URL: postgresql://swyp:swyp@localhost:5432/swyp
-        run: npx prisma migrate deploy
-      - run: npm run test:e2e
+        run: pnpm exec prisma migrate deploy
+      - run: pnpm run test:e2e
 
   image:
     runs-on: ubuntu-latest
@@ -224,8 +226,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-          cache: npm
-      - run: npm ci --ignore-scripts
+      - name: pnpm 켜기
+        run: corepack enable
+      - run: pnpm install --frozen-lockfile --ignore-scripts
       - name: 운영 DB에 마이그레이션 적용
         shell: bash
         env:
@@ -237,7 +240,7 @@ jobs:
             exit 1
           fi
           # 적용 안 된 마이그레이션만 순서대로 적용한다. 되돌리는 기능은 없다. 비밀번호는 GitHub이 로그에서 가린다.
-          npx prisma migrate deploy
+          pnpm exec prisma migrate deploy
 
   # 이 커밋의 이미지를 infra 레포의 이미지 태그로 반영해 Argo CD가 자동 배포하게 한다.
   # 단, 이 커밋이 지금 배포된 버전보다 "앞선" 커밋일 때만 바꾼다. 그래서 늦게 끝난 옛 실행이나 재실행이
