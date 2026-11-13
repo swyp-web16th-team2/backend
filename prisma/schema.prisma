@@ -9,12 +9,3 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
-
-// 임시 모델: Prisma CRUD와 운영 마이그레이션 자동 적용을 시험하려고 만들었고, 시험이 끝나면 지우는 마이그레이션을 올린다.
-model Ping {
-  id        Int      @id @default(autoincrement())
-  message   String
-  createdAt DateTime @default(now()) @map("created_at")
-
-  @@map("ping")
-}
