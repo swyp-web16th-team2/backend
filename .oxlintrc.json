@@ -30,10 +30,18 @@
               "**/db/prisma.service.js"
             ],
             "message": "PrismaService는 Repository와 db 폴더에서만 import합니다. Service는 Repository를 쓰세요(docs/architecture.md 3절)."
+          },
+          {
+            "group": [
+              "@prisma/client/**",
+              "@prisma/adapter-pg/**"
+            ],
+            "message": "Prisma 타입은 Repository와 db 폴더에서만 import합니다(docs/architecture.md 3절)."
           }
         ]
       }
-    ]
+    ],
+    "typescript/no-require-imports": "error"
   },
   "env": {
     "node": true
