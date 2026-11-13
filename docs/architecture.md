@@ -64,7 +64,8 @@ Controller → Service → Repository → PrismaService(infra/db)
 
 - Prisma 모델 이름은 단수 파스칼 케이스(`Space`), 테이블·컬럼 이름은 snake_case(`@@map("space")`, `@map("created_at")`)로 맞춥니다. 복수형 여부는 첫 모델을 만들 때 한 번 정하고 그대로 씁니다.
 - 모든 변경은 마이그레이션 PR로만 합니다. Supabase 대시보드나 MCP로 스키마를 직접 바꾸지 않습니다([가이드](migrations.md)).
-- 운영 DB는 Data API를 끄고 서버(Prisma)로만 접근합니다. 새 테이블은 자동으로 RLS가 켜집니다.
+- 운영 DB는 Data API를 끄고 서버(Prisma)로만 접근합니다.
+- 운영 Supabase 프로젝트는 만들 때 "자동 RLS"를 켜서 `ensure_rls` 이벤트 트리거가 있고, 임시 테이블에서 실제로 RLS가 켜지는 것을 확인했습니다(2026-11-13). **이건 Supabase 프로젝트 설정이지 이 레포가 보장하는 것이 아닙니다.** 로컬 Postgres와 CI의 Postgres에는 없고, 프로젝트를 새로 만들면 다시 켜야 합니다. 그래서 RLS가 필요한 테이블은 이 설정에 기대지 말고 마이그레이션 SQL에 `ALTER TABLE ... ENABLE ROW LEVEL SECURITY`를 직접 적는 것을 원칙으로 합니다(Prisma 스키마로는 표현할 수 없어 `--create-only`로 SQL을 고칩니다. [가이드 2절](migrations.md)).
 
 ## 6. 테스트 방침
 
