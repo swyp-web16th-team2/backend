@@ -33,7 +33,7 @@ node_level() { # 0=충분, 1=동작은 하지만 개발 도구 권장 범위 밖
 node_ver=$(node -p 'process.versions.node')
 set +e; node_level "$node_ver"; level=$?; set -e
 [ "$level" -ne 2 ] || die "Node $node_ver 는 Prisma가 지원하지 않습니다(22.12 이상의 22.x, 또는 24 이상. 23은 안 됩니다). nvm을 쓴다면 'nvm install 22 && nvm use 22' 후 다시 실행하세요."
-[ "$level" -ne 1 ] || echo "[주의] Node $node_ver 는 개발 도구(Nest CLI 등)의 지원 범위(22.22.3 이상)보다 낮습니다. 지금은 계속 진행하지만, 이상한 오류가 나면 'nvm install 22'로 최신 22.x로 올리세요."
+[ "$level" -ne 1 ] || echo "[주의] Node $node_ver 는 개발 도구(Nest CLI 등)의 지원 범위(22.22.3 이상의 22.x, 24.15 이상의 24.x, 26 이상) 밖입니다. 지금은 계속 진행하지만, 이상한 오류가 나면 'nvm install 22'로 최신 22.x로 올리세요."
 docker compose version >/dev/null 2>&1 || die "'docker compose' 명령이 없습니다. Docker Desktop을 최신으로 설치하거나 compose v2 플러그인을 설치하세요."
 docker info >/dev/null 2>&1 || die "Docker가 실행 중이 아닙니다. Docker Desktop을 켠 뒤 다시 실행하세요."
 echo "node $(node -v), npm $(npm -v), $(docker compose version --short 2>/dev/null || echo compose)"

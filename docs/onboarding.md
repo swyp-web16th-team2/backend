@@ -21,7 +21,7 @@ cd backend
 | 프로그램 | 버전 | 확인 |
 |---|---|---|
 | git | 아무거나 | `git --version` |
-| Node.js | **22.12 이상의 22.x, 또는 24 이상**(23은 안 됨). 개발 도구까지 맞추려면 22.22.3 이상 | `node -v` |
+| Node.js | **22.12 이상의 22.x, 또는 24 이상**(23은 안 됨). 개발 도구까지 맞추려면 22.22.3 이상의 22.x, 24.15 이상의 24.x, 26 이상 | `node -v` |
 | Docker | Docker Desktop 최신(`docker compose` 명령이 되는 것) | `docker compose version` |
 
 - Windows는 WSL2 안에서 실행하는 것을 권합니다. 이 스크립트는 bash가 필요합니다. Windows에서 실제로 돌려 보지는 않았습니다.

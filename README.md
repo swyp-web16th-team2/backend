@@ -10,7 +10,7 @@ NestJS(TypeScript) 백엔드 서버입니다.
 
 - GitHub 조직 `swyp-web16th-team2` 초대를 수락합니다: https://github.com/orgs/swyp-web16th-team2/invitation. 수락하기 전에는 push가 안 됩니다.
 - Riido 팀 `SW2`에 들어가 있어야 합니다. 작업 번호(`SW2-45` 같은 것)는 거기서 봅니다.
-- git, Node, Docker Desktop이 필요합니다. Node는 `nvm install 22`로 받는 최신 22.x가 가장 안전합니다(22.12 이상의 22.x 또는 24 이상이어야 하고, 23은 안 됩니다. 22.22.3보다 낮으면 개발 도구가 지원 범위 밖이라 경고가 뜹니다). Docker는 켜 둔 상태여야 합니다. Windows는 WSL2 안에서 실행하세요(Windows에서는 돌려 보지 않았습니다).
+- git, Node, Docker Desktop이 필요합니다. Node는 `nvm install 22`로 받는 최신 22.x가 가장 안전합니다(22.12 이상의 22.x 또는 24 이상이어야 하고, 23은 안 됩니다. 개발 도구는 22.22.3 이상의 22.x, 24.15 이상의 24.x, 26 이상만 지원해서, 범위 밖이면 스크립트가 경고합니다). Docker는 켜 둔 상태여야 합니다. Windows는 WSL2 안에서 실행하세요(Windows에서는 돌려 보지 않았습니다).
 
 **2. 설정**
 
