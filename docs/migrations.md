@@ -117,7 +117,7 @@ DIRECT_URL="$LOCAL_URL" npx prisma migrate status
 
 **설정(한 번만, 사람이 합니다)**
 - `production` 환경은 만들어져 있고, 승인자 필수이며 `main` 브랜치에서만 쓸 수 있게 제한되어 있습니다.
-- **환경 시크릿 `DIRECT_URL`**을 레포 Settings > Environments > production > Environment secrets에 넣어야 합니다. 값은 Supabase Connect 화면의 **Session pooler**(포트 5432) 주소에 비밀번호를 넣은 것입니다. 앱이 쓰는 Transaction pooler(6543)가 아닙니다. 홈서버뿐 아니라 GitHub 러너도 IPv4라서 세션 풀러를 씁니다. 시크릿이 없으면 `migrate`가 이유를 출력하고 실패합니다.
+- **환경 시크릿 `DIRECT_URL`**을 레포 Settings > Environments > production > Environment secrets에 넣어야 합니다. 값은 Supabase Connect 화면의 **Session pooler**(포트 5432) 주소에 비밀번호를 넣은 것입니다. 앱이 쓰는 Transaction pooler(6543)가 아닙니다. **Connect 화면 맨 처음에 보이는 Direct connection 주소(`db.<ref>.supabase.co`)도 쓰면 안 됩니다.** IPv6 전용일 수 있어서 IPv4인 GitHub 러너가 접속하지 못하고 `P1001: Can't reach database server`로 실패합니다(2026-11-13 실제로 겪음). 호스트가 `...pooler.supabase.com`이고 포트가 5432인 **Session pooler** 주소여야 합니다. 홈서버뿐 아니라 GitHub 러너도 IPv4라서 세션 풀러를 씁니다. 시크릿이 없으면 `migrate`가 이유를 출력하고 실패합니다.
 - 이 값은 DB 관리자 권한입니다. 채팅·PR 본문·로그에 붙이지 않습니다. 비밀번호를 바꿨다면 홈서버 시크릿 `backend-db`와 이 시크릿을 **둘 다** 바꿉니다.
 
 **알아 둘 점**
