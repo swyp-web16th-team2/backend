@@ -58,8 +58,8 @@ Controller → Service → Repository → PrismaService(infra/db)
     - **DB 오류**(유니크 위반, `NOT NULL` 위반 등)를 잡으면 Postgres가 그 트랜잭션을 이미 중단시켜서, 이후 쿼리가 실패하거나 끝에 전체가 롤백됩니다. 그런데 바깥 메서드는 에러 없이 정상 반환하므로 호출자는 성공으로 오인할 수 있습니다.
     - 그래서 트랜잭션 안에서 예외를 잡는 일은 피합니다. 일부만 성공해도 되는 경우가 아니면 잡지 말고 전파합니다. 특히 **DB 오류는 트랜잭션 안에서 잡아서 처리하지 않습니다.** 중복 입력처럼 충돌이 예상되는 쓰기는 에러를 받지 말고, `ON CONFLICT DO NOTHING`이나 `createMany`의 `skipDuplicates`처럼 DB가 충돌을 에러로 만들지 않는 방식으로 Repository에서 처리합니다. `upsert`는 동시 요청에서 충돌 에러가 날 수 있는 경우가 있어, 쓰기 전에 그 동작을 확인합니다. 부가 작업의 실패를 잡아 넘기고 싶으면 그 작업을 `Propagation.RequiresNew`로 분리합니다. `RequiresNew`는 **독립적으로 커밋**되므로, 바깥 트랜잭션이 나중에 롤백돼도 그 쓰기는 남습니다. 본 작업이 성공했다는 전제로 남기는 기록에는 쓰지 말고, 바깥이 커밋된 뒤에 하는 후속 처리로 둡니다. (확인 범위: 애플리케이션 예외 쪽은 우리 시험으로, DB 오류 쪽은 코드 리뷰어(codex)의 재현으로 확인했습니다. 충돌을 피하는 방식들의 실제 동작은 첫 구현 때 확인합니다.)
   - 트랜잭션 안에서는 외부 API를 부르지 않습니다(연결과 잠금을 잡고 기다리게 됨). Prisma 대화형 트랜잭션의 기본 제한 시간은 5초입니다. "한 사람이 한 번" 같은 중복은 트랜잭션이 아니라 DB 유니크 제약으로 막고, 충돌 처리는 위처럼 에러를 잡지 않는 방식으로 합니다.
-  - **시험 결과**(2026-11-13, 임시 폴더, Nest 12.4·Prisma 7.10.1·`adapter-pg`): 로컬 Postgres에서 롤백, 커밋, 안쪽 실패 시 바깥 롤백, `this.`로 부른 메서드에도 적용, `RequiresNew`, 같은 연결 사용, 동시 요청 20개 분리가 모두 통과했습니다. 운영 Transaction pooler(6543)에서는 같은 연결 사용과 동시 20개 분리를 확인했고, 롤백은 테이블이 필요해서 로컬로 확인했습니다. 시험하지 않은 것: 실제 HTTP 요청 안에서의 동작, 쓰기 제한 시간과의 상호작용.
-  - 라이브러리(`nestjs-cls`, `@nestjs-cls/transactional`, `@nestjs-cls/transactional-adapter-prisma`) 설치와 `infra/db`의 설정은 **첫 기능 모듈이 필요로 할 때** 합니다. 지금은 설치돼 있지 않습니다.
+  - **시험 결과**(2026-11-13, 임시 폴더, Nest 12.4·Prisma 7.10.1·`adapter-pg` / 2026-11-27, 실제 HTTP 요청 e2e 보강): 로컬 Postgres에서 롤백, 커밋, 안쪽 실패 시 바깥 롤백, `this.`로 부른 메서드에도 적용, `RequiresNew`, `Nested` savepoint 부분 롤백, 같은 연결 사용, 동시 요청 분리가 모두 통과했고, `test/foundation.e2e-spec.ts`에서 실제 HTTP 요청 안에서의 동작(동일 `xid`, 예외 롤백 `aborted`, 중첩 `Required` 합류, `Nested` savepoint 부분 롤백, 동시 요청 분리)도 검증했습니다. 운영 Transaction pooler(6543)에서는 같은 연결 사용과 동시 20개 분리를 확인했고, 롤백은 테이블이 필요해서 로컬로 확인했습니다. 시험하지 않은 것: 쓰기 제한 시간과의 상호작용.
+  - 라이브러리(`nestjs-cls`, `@nestjs-cls/transactional`, `@nestjs-cls/transactional-adapter-prisma`)는 `src/db/db.module.ts`에 설치·연결되어 있습니다(`sqlFlavor: 'postgresql'`).
 - **쓰기에 제한 시간을 걸 때**의 주의는 `PrismaService`의 주석에 있습니다(클라이언트 쪽 시간 초과가 쓰기 중복을 만들 수 있음).
 
 ## 4. 열린 결정 (PRD·ERD 뒤에 확정)
@@ -70,8 +70,8 @@ Controller → Service → Repository → PrismaService(infra/db)
 | 혼잡도 수집 | 서울시 API를 주기적으로 받아 DB에 저장 / 요청 때 불러 Redis에 짧게 캐시 | 스케줄러 필요 여부, 이력 테이블, API 호출 제한 대응 |
 | 좌표 계산 | 위도·경도 컬럼과 간단한 거리 계산 / PostGIS | Prisma는 PostGIS 타입을 기본 지원하지 않아 후자는 직접 SQL(`$queryRaw`) 필요 |
 | 실시간성 | 폴링 / SSE / WebSocket | 투표 현황·멤버 위치 갱신 방식, 서버 구성 |
-| 요청 검증·직렬화 | `class-validator`+`class-transformer` / Zod 등 | DTO 작성 방식(지금은 어느 쪽도 설치돼 있지 않음) |
-| API 형식 | 에러 응답 형식, 페이지네이션, 버전 접두사(`/v1`) | 프론트와 함께 정함(API 목록 정리 task에서) |
+| 요청 검증·직렬화 | **`Zod` + `ZodValidationPipe`**(확정) / `class-validator`+`class-transformer` | 순수 `Zod`와 `src/common/pipes/zod-validation.pipe.ts` 설치·적용 완료(응답 직렬화는 DTO 직접 매핑) |
+| API 형식 | **전역 `/api` prefix, `{ code, message, details? }` 에러 형식**(1차 확정) | `src/setup-app.ts`, `src/common/filters/http-exception.filter.ts` 적용 완료(`/`, `/health`는 프로브용 제외, 세부 규약은 `SW2-67`) |
 
 ## 5. DB 규칙(제안)
 

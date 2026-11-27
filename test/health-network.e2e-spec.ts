@@ -4,6 +4,7 @@ import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { setupApp } from './../src/setup-app.js';
 
 const hasServices = Boolean(process.env.DATABASE_URL && process.env.REDIS_URL);
 
@@ -57,12 +58,16 @@ describe.skipIf(!hasServices)('DB 연결이 조용히 끊겼다 복구될 때', 
       imports: [AppModule],
     }).compile();
     const app: INestApplication<App> = moduleRef.createNestApplication();
+    setupApp(app);
     await app.init();
     try {
       await request(app.getHttpServer()).get('/health').expect(200);
 
       proxy.setDrop(true);
-      await request(app.getHttpServer()).get('/health').expect(503);
+      await request(app.getHttpServer())
+        .get('/health')
+        .expect(503)
+        .expect({ status: 'degraded', db: 'down', redis: 'up' });
 
       proxy.setDrop(false);
       // 점검은 매번 새 연결을 쓰고 시간이 지나면 소켓을 끊기 때문에, 길이 다시 열리면 곧바로 복구돼야 한다.
