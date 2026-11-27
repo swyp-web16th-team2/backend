@@ -13,5 +13,5 @@ export function corsOrigins(
 }
 
 export function setupCors(app: INestApplication, env?: string): void {
-  app.enableCors({ origin: corsOrigins(env) });
+  app.enableCors({ origin: corsOrigins(env), credentials: true });
 }
